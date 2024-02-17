@@ -1,0 +1,97 @@
+VERSION ""
+
+NS_ : 
+	NS_DESC_
+	CM_
+	BA_DEF_
+	BA_
+	VAL_
+	CAT_DEF_
+	CAT_
+	FILTER
+	BA_DEF_DEF_
+	EV_DATA_
+	ENVVAR_DATA_
+	SGTYPE_
+	SGTYPE_VAL_
+	BA_DEF_SGTYPE_
+	BA_SGTYPE_
+	SIG_TYPE_REF_
+	VAL_TABLE_
+	SIG_GROUP_
+	SIG_VALTYPE_
+	SIGTYPE_VALTYPE_
+	BO_TX_BU_
+	BA_DEF_REL_
+	BA_REL_
+	BA_DEF_DEF_REL_
+	BU_SG_REL_
+	BU_EV_REL_
+	BU_BO_REL_
+
+
+BS_:
+
+BU_:
+
+
+BO_ 96 m2: 8 Vector__XXX
+ SG_ s4 : 5|2@0- (1,0) [-2|1] "" Vector__XXX
+ SG_ s3 : 7|32@0+ (1,0) [0|4.29497e+009] "" Vector__XXX
+ SG_ s2 : 39|10@0- (1,0) [-512|511] "" Vector__XXX
+ SG_ s1 : 49|12@0- (1,0) [-2048|2047] "k" Vector__XXX
+
+BO_ 69 m1: 7 Vector__XXX
+ SG_ s4 : 7|2@0- (1,0) [-2|1] "" Vector__XXX
+ SG_ s3 : 21|32@0+ (1,0) [0|4.29497e+009] "" Vector__XXX
+ SG_ s2 : 37|10@0- (1,0) [-512|511] "" Vector__XXX
+ SG_ s1 : 43|12@0- (1,0) [-2048|2047] "k" Vector__XXX
+
+BO_ 513 RadarState_0: 8 SRR308
+ SG_ RadarState_InvalidClusters : 55|8@0+ (1,0) [0|255] ""  ExternalUnit
+ SG_ RadarState_Voltage_Error : 17|1@0+ (1,0) [0|0] ""  ExternalUnit
+ SG_ RadarState_Temporary_Error : 18|1@0+ (1,0) [0|0] ""  ExternalUnit
+ SG_ RadarState_Temperature_Error : 19|1@0+ (1,0) [0|0] ""  ExternalUnit
+ SG_ RadarState_Interference : 20|1@0+ (1,0) [0|0] ""  ExternalUnit
+ SG_ RadarState_Persistent_Error : 21|1@0+ (1,0) [0|0] ""  ExternalUnit
+ SG_ RadarState_SortIndex : 38|3@0+ (1,0) [0|0] ""  ExternalUnit
+ SG_ RadarState_RCS_Threshold : 60|3@0+ (1,0) [0|7] ""  ExternalUnit
+ SG_ RadarState_CtrlRelayCfg : 41|1@0+ (1,0) [0|1] ""  ExternalUnit
+ SG_ RadarState_SendQualityCfg : 44|1@0+ (1,0) [0|1] ""  ExternalUnit
+ SG_ RadarState_SendExtInfoCfg : 45|1@0+ (1,0) [0|1] ""  ExternalUnit
+ SG_ RadarState_MotionRxState : 47|2@0+ (1,0) [0|3] ""  ExternalUnit
+ SG_ RadarState_SensorID : 34|3@0+ (1,0) [0|7] ""  ExternalUnit
+ SG_ RadarState_OutputTypeCfg : 43|2@0+ (1,0) [0|3] ""  ExternalUnit
+ SG_ RadarState_RadarPowerCfg : 25|3@0+ (1,0) [0|7] ""  ExternalUnit
+ SG_ RadarState_NVMReadStatus : 6|1@0+ (1,0) [0|1] ""  ExternalUnit
+ SG_ RadarState_NVMwriteStatus : 7|1@0+ (1,0) [0|1] ""  ExternalUnit
+ SG_ RadarState_MaxDistanceCfg : 15|10@0+ (2,0) [0|2046] ""  ExternalUnit
+
+BO_ 768 SpeedInformation_0: 2 ExternalUnit
+ SG_ RadarDevice_Speed : 4|13@0+ (0.02,0) [0|163.8] "m/s"  SRR308
+ SG_ RadarDevice_SpeedDirection : 7|2@0+ (1,0) [0|2] ""  SRR308
+
+BO_ 769 YawRateInformation_0: 2 ExternalUnit
+ SG_ RadarDevice_YawRate : 7|16@0+ (0.01,-327.68) [-327.68|327.66] "°/s"  SRR308
+
+BO_ 512 RadarConfiguration_0: 8 ExternalUnit
+ SG_ RadarCfg_InvalidClusters_valid : 52|1@0+ (1,0) [0|1] ""  SRR308,ExternalUnit
+ SG_ RadarCfg_InvalidClusters : 63|8@0+ (1,0) [0|255] ""  SRR308,ExternalUnit
+ SG_ RadarCfg_RCS_Threshold_Valid : 48|1@0+ (1,0) [0|1] ""  SRR308,ExternalUnit
+ SG_ RadarCfg_RCS_Threshold : 51|3@0+ (1,0) [0|7] ""  SRR308,ExternalUnit
+ SG_ RadarCfg_StoreInNVM_valid : 7|1@0+ (1,0) [0|1] ""  SRR308,ExternalUnit
+ SG_ RadarCfg_SortIndex_valid : 6|1@0+ (1,0) [0|1] ""  SRR308,ExternalUnit
+ SG_ RadarCfg_SortIndex : 46|3@0+ (1,0) [0|7] ""  SRR308,ExternalUnit
+ SG_ RadarCfg_StoreInNVM : 47|1@0+ (1,0) [0|1] ""  ExternalUnit,SRR308
+ SG_ RadarCfg_SendExtInfo_valid : 5|1@0+ (1,0) [0|1] ""  ExternalUnit,SRR308
+ SG_ RadarCfg_SendExtInfo : 43|1@0+ (1,0) [0|1] ""  ExternalUnit,SRR308
+ SG_ RadarCfg_CtrlRelay_valid : 40|1@0+ (1,0) [0|1] ""  ExternalUnit,SRR308
+ SG_ RadarCfg_CtrlRelay : 41|1@0+ (1,0) [0|1] ""  ExternalUnit,SRR308
+ SG_ RadarCfg_SendQuality_valid : 4|1@0+ (1,0) [0|1] ""  ExternalUnit,SRR308
+ SG_ RadarCfg_SendQuality : 42|1@0+ (1,0) [0|1] ""  ExternalUnit,SRR308
+ SG_ RadarCfg_MaxDistance_valid : 0|1@0+ (1,0) [0|1] ""  ExternalUnit,SRR308
+ SG_ RadarCfg_OutputType_valid : 3|1@0+ (1,0) [0|1] ""  ExternalUnit,SRR308
+ SG_ RadarCfg_SensorID_valid : 1|1@0+ (1,0) [0|1] ""  ExternalUnit,SRR308
+ SG_ RadarCfg_MaxDistance : 15|10@0+ (2,0) [0|2046] "m"  ExternalUnit,SRR308
+ SG_ RadarCfg_OutputType : 36|2@0+ (1,0) [0|2] ""  ExternalUnit,SRR308
+ SG_ RadarCfg_SensorID : 34|3@0+ (1,0) [0|7] ""  ExternalUnit,SRR308
