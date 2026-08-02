@@ -26,7 +26,7 @@ This project therefore provides a DBC compiler that generates output in two form
 ### Building and running
 
 Dependencies:
-* protobuf (follow the [instructions](https://github.com/protocolbuffers/protobuf/blob/main/src/README.md) to install the latest version)
+* cmake, a C++17 compiler
 * gtest — ```apt install libgtest-dev```
 
 The following commands build the code and place three executables (*all_tests*, *can_sandbox*, and *dbc_compiler*) into the **bin** folder. Building inside the `build` directory keeps the repository root free of CMake artifacts:
@@ -54,6 +54,14 @@ Running main() from /build/googletest-j5yxiC/googletest-1.10.0/googletest/src/gt
 [  PASSED  ] 20 tests.
 VirtualBox:~/src/J1939$
 ```
+`SocketCanStream` is tested separately, against a real (virtual) SocketCAN interface,
+since that needs `CAP_NET_ADMIN` and the `vcan` kernel module rather than just a plain
+build. Using the Docker image (see below):
+```bash
+sudo modprobe vcan
+docker build -t j1939 .
+docker run --rm --cap-add=NET_ADMIN j1939 cmake --build build --target vcan_tests
+```
 #### Using can_sandbox
 
 This tool decodes CAN traffic log files in several text formats (ASC, LOG, TRC, OUT, and ROS) and prints the content to the console. A sample log file is provided.
@@ -61,7 +69,7 @@ This tool decodes CAN traffic log files in several text formats (ASC, LOG, TRC, 
 VirtualBox:~/src/J1939$ bin/can_sandbox
 Usage: can_sandbox <options>
    where <options> could be:
-    -in <arg>		Defines the input device (can0) or a log file (log|trc|txt|asc|ros|out) to read the data from.
+    -in <arg>		Defines the input device (can0) or a log file (log|trc|txt|asc|out) to read the data from.
     -out <arg>		Defines the CAN interface to play back the log file into or a file name to record the stream into (.log)
     -dbc <arg>		Defines a DBC file which should be used to parse CAN frames.
     -ext		Treat input messages as extended CAN frames (by default the extended bit from the CAN ID is used)

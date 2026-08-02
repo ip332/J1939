@@ -3,6 +3,13 @@ cmake_minimum_required(VERSION 3.16)
 project(J1939)
 
 set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
+option(ENABLE_COVERAGE "Build with gcov instrumentation for coverage reports" OFF)
+if(ENABLE_COVERAGE)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --coverage -O0 -g")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} --coverage")
+endif()
 
 # Standard macro to build a STATIC library.
 macro(define_lib LIB_NAME)
@@ -52,10 +59,53 @@ add_definitions(-DDBC_FOLDER="${CMAKE_CURRENT_SOURCE_DIR}/tests/dbc/")
 
 # Build test app
 file(GLOB ALL_TESTS "tests/*cpp")
+# socket_can_stream_tests.cpp needs a real vcan0 interface + CAP_NET_ADMIN, so it's
+# built as its own binary (see socket_can_tests below) and kept out of all_tests.
+list(REMOVE_ITEM ALL_TESTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/socket_can_stream_tests.cpp")
 add_executable(all_tests ${ALL_TESTS})
 add_test(all_tests ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/all_tests)
 
 # Tell linker about all libs to be used there
-target_link_libraries(all_tests GTest::GTest GTest::Main j1939_parser)
+target_link_libraries(all_tests GTest::GTest GTest::Main j1939_parser can_streams)
 # Make it discoverable
 gtest_discover_tests(all_tests)
+
+# Integration tests against a real (virtual) SocketCAN interface. These need
+# CAP_NET_ADMIN and a "vcan0" interface, neither available in a plain build sandbox,
+# so this is a separate binary that's built here but deliberately not registered via
+# add_test/gtest_discover_tests -- see README.md for how to run it.
+add_executable(socket_can_tests tests/socket_can_stream_tests.cpp)
+target_link_libraries(socket_can_tests GTest::GTest GTest::Main can_streams)
+
+# Sets up (best-effort) and runs the vcan0-based integration tests above. The caller
+# still needs to grant CAP_NET_ADMIN (e.g. `docker run --cap-add=NET_ADMIN`) for the
+# `ip link` step to succeed; the `modprobe` here is a best-effort convenience for
+# environments where the vcan module is already reachable, not a substitute for
+# loading it on the host first (a plain container can't load a brand-new kernel
+# module -- see README.md).
+add_custom_target(vcan_tests
+    COMMAND sh -c "modprobe vcan 2>/dev/null || true"
+    COMMAND sh -c "ip link show vcan0 >/dev/null 2>&1 || (ip link add dev vcan0 type vcan && ip link set up vcan0)"
+    COMMAND $<TARGET_FILE:socket_can_tests>
+    DEPENDS socket_can_tests
+    COMMENT "Setting up vcan0 (best-effort) and running SocketCanStream integration tests"
+)
+
+if(ENABLE_COVERAGE)
+    find_program(GCOVR_EXECUTABLE gcovr)
+    if(GCOVR_EXECUTABLE)
+        add_custom_target(coverage
+            COMMAND $<TARGET_FILE:all_tests>
+            COMMAND ${GCOVR_EXECUTABLE} --root ${CMAKE_SOURCE_DIR}
+                    --exclude '.*/tests/.*' --exclude '.*/build/.*'
+                    --print-summary
+                    --html-details ${CMAKE_BINARY_DIR}/coverage.html
+                    --txt ${CMAKE_BINARY_DIR}/coverage.txt
+            WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+            DEPENDS all_tests
+            COMMENT "Running tests and generating coverage report"
+        )
+    else()
+        message(WARNING "ENABLE_COVERAGE is on but gcovr was not found; the 'coverage' target will not be available.")
+    endif()
+endif()
