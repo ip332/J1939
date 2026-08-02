@@ -42,19 +42,16 @@ bool LogStream::get(J1939_frame *frame) {
         // Invalid format
         return false;
     }
-    char *can_id_str = split - 8;
     char *data_str = split + 1;
     *split = 0;
 
     uint32_t can_id = 0;
-    sscanf(can_id_str,"%8X", & can_id);
+    sscanf(buf,"%8X", & can_id);
 
     size_t data_len = strlen(data_str) / 2;
-    uint8_t data[data_len];
-    for (uint32_t i = 0; i < data_len; i++) {
-        uint32_t tmp = 0;
-        sscanf(&data_str[2 * i], "%2X", &tmp);
-        data[i] = tmp & 0xFF;
+    uint8_t data[J1939_frame::max_dlc_];
+    if (!decodeHexString(data_str, data_len, data)) {
+        return false;
     }
     return frame->setFrom(can_id | extended_, data, data_len);
 }

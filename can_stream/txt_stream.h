@@ -8,6 +8,9 @@
 #include "can_stream.h"
 
 class TxtStream : public CanStream {
+    // This format has no timestamp field in some variants, so one is synthesized;
+    // per-instance so multiple TxtStream objects don't share fake clocks.
+    double fake_time_ = 0.;
 public:
     TxtStream() : CanStream() { writable_ = true; }
     bool put(const J1939_frame & frame) const override;

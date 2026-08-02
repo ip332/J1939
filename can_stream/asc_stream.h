@@ -9,6 +9,10 @@
 
 class AscStream : public CanStream {
     uint8_t month(const char *str) const;
+    // Parsed from the "date" header line; per-instance so multiple AscStream
+    // objects (or a rewound one) don't share state.
+    double start_time_ = 0.;
+    bool decimal_ = false;
 public:
     bool put(const J1939_frame & /*frame*/) const override { return false; };
     bool get(J1939_frame *frame) override;

@@ -8,6 +8,9 @@
 #include "can_stream.h"
 
 class OutStream : public CanStream {
+    // This format has no timestamp field, so one is synthesized; per-instance
+    // so multiple OutStream objects don't share fake clocks.
+    double fake_time_ = 0.;
 public:
     bool put(const J1939_frame & /*frame*/) const override { return false; };
     bool get(J1939_frame *frame) override;

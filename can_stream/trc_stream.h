@@ -8,6 +8,9 @@
 #include "can_stream.h"
 
 class TrcStream : public CanStream {
+    // Parsed from the "Start time" comment line; per-instance so multiple
+    // TrcStream objects (or a rewound one) don't share state.
+    double start_time_ = 0.;
 public:
     bool put(const J1939_frame & /*frame*/) const override { return false; };
     bool get(J1939_frame *frame) override;

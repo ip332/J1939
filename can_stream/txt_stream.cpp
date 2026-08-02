@@ -11,9 +11,8 @@ bool TxtStream::get(J1939_frame *frame) {
     }
 
     // There is no time field today therefore fake it, assuming 1ms per record.
-    static double fake_time = 0.;
-    frame->time_ns_ = fake_time * 1E9;
-    fake_time += 0.1;
+    frame->time_ns_ = fake_time_ * 1E9;
+    fake_time_ += 0.1;
 
     // Expected format:
     //  can0  19F21200   [8]  20 0B 01 01 00 64 FF FF
@@ -45,11 +44,9 @@ bool TxtStream::get(J1939_frame *frame) {
     uint32_t can_id = 0;
     sscanf(fields_[idx],"%8X", & can_id);
     size_t data_len = fields_.size() - (idx + 2);
-    uint8_t data[data_len];
-    for (size_t i = 0; i < data_len; i++) {
-        uint32_t tmp = 0;
-        sscanf(fields_[idx + 2 + i], "%2X ", &tmp);
-        data[i] = tmp & 0xFF;
+    uint8_t data[J1939_frame::max_dlc_];
+    if (!decodeFields(idx + 2, data_len, 16, data)) {
+        return false;
     }
     return frame->setFrom(can_id | extended_, data, data_len);
 }

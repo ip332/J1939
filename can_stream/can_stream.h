@@ -17,7 +17,9 @@ protected:
     // This flag can be set in the derived class constructor
     bool writable_;
     // File will be read line by line so here is the buffer to store a single line.
-    char buffer_[100];
+    // Sized to comfortably hold a long/TP-reassembled frame (up to J1939_frame::max_dlc_
+    // bytes) rendered as hex text, plus format-specific header text.
+    char buffer_[8192];
     // That buffer should be represented as an array of fields.
     // Each field will be stored as a pointer to the actual buffer.
     std::vector<char *> fields_;
@@ -28,6 +30,15 @@ protected:
     bool real_port;
     // Reads line, parses it onto fields and returns number of items in the fields_ array.
     size_t get_fields();
+    // Decodes `count` whitespace-separated numeric fields (given `base`, e.g. 16 for hex,
+    // 10 for decimal) starting at fields_[start] into out[0..count). The declared count
+    // always comes from untrusted file content, so this rejects (returns false, out left
+    // untouched) rather than indexing blindly if count exceeds J1939_frame::max_dlc_ or if
+    // fewer than `count` fields remain.
+    bool decodeFields(size_t start, size_t count, int base, uint8_t *out) const;
+    // Decodes a contiguous string of 2-hex-digit-per-byte data (no separators) into
+    // out[0..count). Same untrusted-count guard as decodeFields().
+    bool decodeHexString(const char *hex, size_t count, uint8_t *out) const;
 public:
     CanStream() : file_(nullptr), writable_(false), extended_(false), real_port(false) {}
 

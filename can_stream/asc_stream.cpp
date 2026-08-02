@@ -25,8 +25,6 @@ bool AscStream::get(J1939_frame *msg) {
     if (fields_cnt == 0) {
         return false;
     }
-    static double start_time = 0.;
-    static bool decimal = false;
     // Expected format:
     // === Header ====
     // date Tue Nov 5 02:41:52.218 pm 2019
@@ -42,14 +40,17 @@ bool AscStream::get(J1939_frame *msg) {
     // === Data to parse ====
     // 7.006866 1  CFF2100x        Rx   d 8 00 00 32 00 32 00 00 0B  Length = 0 BitCount = 0 ID = 218046720x
     if (!strcmp(fields_[0], "base")) {
-        if (!strncmp(fields_[1],"dec", 3)) {
-            decimal = true;
+        if ((fields_cnt >= 2) && !strncmp(fields_[1],"dec", 3)) {
+            decimal_ = true;
         }
         return false;
     }
     if (!strcmp(fields_[0], "date")) {
         // Fields: date Tue Nov 5 02:41:52.218 pm 2019
         // Indices:   0   1   2 3            4  5    6
+        if (fields_cnt < 7) {
+            return false;
+        }
         struct tm tm{};
         memset(&tm, 0, sizeof(tm));
         uint8_t mon = month(fields_[2]);
@@ -65,11 +66,11 @@ bool AscStream::get(J1939_frame *msg) {
             tm.tm_mon = mon;
             sscanf(fields_[6],"%d", & tm.tm_year);
             tm.tm_year -= 1900;
-            start_time = mktime(&tm);
+            start_time_ = mktime(&tm);
         }
         return false;
     }
-    if ((fields_cnt < 3) || strcmp(fields_[3],"Rx")) {
+    if ((fields_cnt < 6) || strcmp(fields_[3],"Rx")) {
         return false;
     }
     // === Data to parse ====
@@ -90,7 +91,7 @@ bool AscStream::get(J1939_frame *msg) {
     }
     float offset = 0;
     sscanf(fields_[0], "%f", & offset);
-    msg->time_ns_ = (start_time + offset) * 1E9;
+    msg->time_ns_ = (start_time_ + offset) * 1E9;
 
     bool extended = false;
     char *can_id_end = strchr(fields_[2], 'x');
@@ -99,7 +100,7 @@ bool AscStream::get(J1939_frame *msg) {
         *can_id_end = 0;
     }
     uint32_t can_id = 0;
-    if (decimal) {
+    if (decimal_) {
         sscanf(fields_[2],"%u", & can_id);
     } else {
         sscanf(fields_[2],"%X", & can_id);
@@ -108,15 +109,9 @@ bool AscStream::get(J1939_frame *msg) {
     uint32_t data_len = 0;
     sscanf(fields_[5],"%u", & data_len);
 
-    uint8_t data[data_len];
-    for (uint32_t i = 0; i < data_len; i++) {
-        uint32_t tmp = 0;
-        if (decimal) {
-            sscanf(fields_[6 + i], "%3u", &tmp);
-        } else {
-            sscanf(fields_[6 + i], "%2X ", &tmp);
-        }
-        data[i] = tmp & 0xFF;
+    uint8_t data[J1939_frame::max_dlc_];
+    if (!decodeFields(6, data_len, decimal_ ? 10 : 16, data)) {
+        return false;
     }
     return msg->setFrom(can_id | extended | extended_, data, data_len);
 }

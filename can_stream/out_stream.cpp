@@ -4,6 +4,8 @@
 
 #include "out_stream.h"
 
+#include <cstdlib>
+
 bool OutStream::get(J1939_frame *frame) {
     auto fields_cnt = get_fields();
     if (fields_cnt == 0) {
@@ -11,18 +13,21 @@ bool OutStream::get(J1939_frame *frame) {
     }
 
     // There is no time field today therefore fake it, assuming 1ms per record.
-    static double fake_time = 0.;
     // Expected format:
     // interface = can0, family = 29, type = 3, proto = 1
     // <0x0cf00400> [8] ff ff ff 0c 1c ff f4 7d
     // Fields:   0   1  2 ....
+    if (fields_cnt < 2) {
+        // Weird format, ignore it.
+        return false;
+    }
     char *buf = fields_[0];
     if (*buf++ != '<') {
         // Invalid format (comment?)
         return false;
     }
-    frame->time_ns_ = fake_time * 1E9;
-    fake_time += 0.001;
+    frame->time_ns_ = fake_time_ * 1E9;
+    fake_time_ += 0.001;
     // Find CAN ID prefix
     char *can_id_str = strstr(buf,"0x");
     if (can_id_str == nullptr) {
@@ -46,12 +51,14 @@ bool OutStream::get(J1939_frame *frame) {
         return false;
     }
     *end = 0;
-    uint32_t data_len = std::stoul(ptr);
-    uint8_t data[data_len];
-    for (uint32_t i = 0; i < data_len; i++) {
-        uint32_t tmp = 0;
-        sscanf(fields_[2 + i], "%2X ", &tmp);
-        data[i] = tmp & 0xFF;
+    char *num_end = nullptr;
+    unsigned long data_len = strtoul(ptr, &num_end, 10);
+    if (num_end == ptr) {
+        return false;
+    }
+    uint8_t data[J1939_frame::max_dlc_];
+    if (!decodeFields(2, data_len, 16, data)) {
+        return false;
     }
     return frame->setFrom(can_id | extended_, data, data_len);
 }

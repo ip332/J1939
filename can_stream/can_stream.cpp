@@ -3,17 +3,64 @@
 //
 
 #include "asc_stream.h"
-#include "bin_stream.h"
 #include "log_stream.h"
 #include "out_stream.h"
 #include "trc_stream.h"
 #include "txt_stream.h"
 #include "socket_can_stream.h"
 
+#include <cstdlib>
+#include <cstring>
+
+bool CanStream::decodeFields(size_t start, size_t count, int base, uint8_t *out) const {
+    if (count > J1939_frame::max_dlc_) {
+        return false;
+    }
+    if (start + count > fields_.size()) {
+        return false;
+    }
+    for (size_t i = 0; i < count; i++) {
+        char *end = nullptr;
+        unsigned long value = strtoul(fields_[start + i], &end, base);
+        if (end == fields_[start + i]) {
+            return false;
+        }
+        out[i] = static_cast<uint8_t>(value & 0xFF);
+    }
+    return true;
+}
+
+bool CanStream::decodeHexString(const char *hex, size_t count, uint8_t *out) const {
+    if (count > J1939_frame::max_dlc_) {
+        return false;
+    }
+    if (strlen(hex) < count * 2) {
+        return false;
+    }
+    for (size_t i = 0; i < count; i++) {
+        uint32_t tmp = 0;
+        if (sscanf(hex + 2 * i, "%2X", &tmp) != 1) {
+            return false;
+        }
+        out[i] = tmp & 0xFF;
+    }
+    return true;
+}
+
 size_t CanStream::get_fields() {
     buffer_[0] = 0;
     auto p = fgets(buffer_, sizeof(buffer_) - 1, file_);
     if (feof(file_) || (p == NULL)) {
+        return 0;
+    }
+    if ((strchr(buffer_, '\n') == nullptr) && !feof(file_)) {
+        // The line is longer than buffer_ and got truncated by fgets(). Discard the
+        // rest of it so the next call doesn't misparse its tail as a new line, and
+        // skip this (malformed/oversized) line rather than silently parsing a
+        // truncated fragment.
+        int c;
+        while (((c = fgetc(file_)) != '\n') && (c != EOF)) {
+        }
         return 0;
     }
     // Find the first non whitespace character
@@ -46,15 +93,12 @@ size_t CanStream::get_fields() {
 }
 
 std::string SupportedStreams() {
-    return "asc|bin|log|out|ros|trc|txt";
+    return "asc|log|out|trc|txt";
 }
 
 std::unique_ptr<CanStream> CanStreamFor(const std::string &input) {
     if (input.find(".asc") != std::string::npos) {
         return std::make_unique<AscStream>();
-    }
-    if (input.find(".bin") != std::string::npos) {
-        return std::make_unique<BinStream>();
     }
     if (input.find(".log") != std::string::npos) {
         return std::make_unique<LogStream>();
