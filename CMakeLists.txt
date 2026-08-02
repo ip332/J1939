@@ -66,7 +66,7 @@ add_executable(all_tests ${ALL_TESTS})
 add_test(all_tests ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/all_tests)
 
 # Tell linker about all libs to be used there
-target_link_libraries(all_tests GTest::GTest GTest::Main j1939_parser can_streams)
+target_link_libraries(all_tests GTest::GTest GTest::Main j1939_parser can_streams can_sandbox_lib can_reader)
 # Make it discoverable
 gtest_discover_tests(all_tests)
 

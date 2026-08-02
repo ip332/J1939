@@ -58,6 +58,18 @@ public:
     // Defines extra processing for a parsed message
     void setParserCallback(std::function<void(const J1939Parser & parser)> cb) { parser_callback_ = cb; }
 
+    // Injects a stream directly instead of going through parseOptions()'s
+    // CanStreamFor(path) lookup -- useful both for tests (e.g. with MockCanStream)
+    // and for embedding CanSandbox programmatically without a CLI argument round-trip.
+    void setInputStream(std::unique_ptr<CanStream> stream, std::string name = "") {
+        input_stream_ = std::move(name);
+        input_ = std::move(stream);
+    }
+    void setOutputStream(std::unique_ptr<CanStream> stream, std::string name = "") {
+        output_stream_ = std::move(name);
+        output_ = std::move(stream);
+    }
+
     // Start input stream handling.
     void startProcessing();
 };
