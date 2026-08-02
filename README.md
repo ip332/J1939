@@ -1,44 +1,44 @@
 ## Summary
 
-`J1939` repository provides a library to handle encoding/decoding of a CAN frame and tools to convert DBC files into a proprietary data format. 
+The `J1939` repository provides a library for encoding and decoding CAN frames, along with tools to compile DBC files into a compact, generated data format.
 
 ## Background
-There are two different tasks where we might want to read a J1939 stream:
-* **message-centric**, when we know what exactly messages to read. This is how a typical ECU (engine, brakes, FLR, ACC, etc.) works: it knows how to deal with a small subset of all messages and ignores the rest. 
-* **streaming**, when we want to read all messages to log them into a file or to share it with some other components in the system.
 
-While both tasks could be addressed using the same implementation, the first one should be designed in a way to satisfy typical requirements for the automotive ECU with respect to the performance memory management.
-In such case, the application code would declare variable for each message to deal with (i.e. TSC1, XBR, etc.) and ignore the rest of the CAN traffic.
-In streaming mode, however, creating individual variable for each message type would be impractical so for that mode, we need a generic API and detailed information about all messages and signals stored in some data storage.
+There are two different scenarios where you might want to read a J1939 stream:
+* **Message-centric**, when you know exactly which messages you need to read. This is how a typical ECU (engine, brakes, FLR, ACC, etc.) works: it knows how to handle a small subset of messages and ignores the rest.
+* **Streaming**, when you want to read all messages, either to log them to a file or to share them with other components in the system.
 
-On the other side, regardless of the use case, the encoding/decoding functionality should be performed in a consistent way across all modules and subsystems.
-A possible solution would be to parse a DBC file at runtime (like it was done in the roscan repository). But this method might be not acceptable for the safety critical applications. Besides, compiling DBC during the build time provides more time for validation.  
+Both scenarios could be addressed with the same implementation, but the message-centric case should be designed to meet the performance and memory constraints typical of automotive ECUs. In this case, the application code declares a variable for each message it cares about (e.g., TSC1, XBR) and ignores the rest of the CAN traffic. In streaming mode, however, declaring an individual variable for every message type would be impractical, so this mode needs a generic API backed by detailed metadata about all messages and signals.
 
-Therefore, the proposed solution is based on providing a DBC compiler which can generate output in two different formats (named **PGN** and **Union**) for multiple input files.
+Regardless of the use case, encoding and decoding should behave consistently across all modules and subsystems. One option is to parse a DBC file at runtime, as the roscan project does, but this approach may not be acceptable for safety-critical applications. Compiling the DBC at build time also allows more thorough validation.
+
+This project therefore provides a DBC compiler that generates output in two formats — **PGN** and **Union** — from one or more input files.
 
 ## Content
-* **J1939**, the library which combines DBC parser, run-time data types and actual J1939 encoding/decoding functionality. It is compiled into a static library.
-* **dbc_compiler**, the actual DBC compiler, which can process multiple input files and generate output code in two formats (see below).
-* **test**, the unit tests folder which covers most of the components in the library.
-* **can_reader**, collection of classes, compiled into a static library, to handle long messages and read/write of a physical CAN port using Socket CAN API. 
-* **options**, super light-weight command line parser. Could be replaced by **gflags** in the future (TBD).
-* **console**, a simple console app to read a log file and show its content in a human-readable format. It is provided to show how the parser could be used.
 
-### How to build and run it.
-dependencies:
-* protobuf (follow the [instructions](https://github.com/protocolbuffers/protobuf/blob/main/src/README.md) to install the latest)
-* gtest ```apt install libgtest-dev```
+* **J1939** — the library combining the DBC parser, runtime data types, and the J1939 encoding/decoding functionality. Built as a static library.
+* **dbc_compiler** — the DBC compiler itself, which processes multiple input files and generates output code in the two formats described below.
+* **tests** — the unit test suite covering most of the library's components.
+* **can_reader** — a collection of classes, built as a static library, that handle long (multi-frame) messages and reading/writing a physical CAN port via the SocketCAN API.
+* **options** — a lightweight command-line parser. May be replaced with **gflags** in the future (TBD).
+* **console** — a simple console application that reads a log file and prints its content in a human-readable format, demonstrating how the parser can be used.
 
-The following two commands will build the code and place three executables (*all_tests*, *can_sandbox* and *dbc_compiler*) into the **bin** folder:
-(using the ```build``` directory keep the root directory free of CMake build artifacts)
+### Building and running
+
+Dependencies:
+* protobuf (follow the [instructions](https://github.com/protocolbuffers/protobuf/blob/main/src/README.md) to install the latest version)
+* gtest — ```apt install libgtest-dev```
+
+The following commands build the code and place three executables (*all_tests*, *can_sandbox*, and *dbc_compiler*) into the **bin** folder. Building inside the `build` directory keeps the repository root free of CMake artifacts:
 ```bash
 mkdir build
 cd build
 cmake ..
 make all
 ```
-#### Running unit tests.
-This is probably the easiest part:
+#### Running unit tests
+
+This is the simplest part:
 ```bash
 VirtualBox:~/src/J1939$ bin/all_tests 
 Running main() from /build/googletest-j5yxiC/googletest-1.10.0/googletest/src/gtest_main.cc
@@ -54,8 +54,9 @@ Running main() from /build/googletest-j5yxiC/googletest-1.10.0/googletest/src/gt
 [  PASSED  ] 20 tests.
 VirtualBox:~/src/J1939$
 ```
-#### Using can_sandbox.
-This tool can decode CAN traffic log files in different text formats (ASC, LOG, TRC, OUT and ROS) and show the content on the console. A sample log file is provided. 
+#### Using can_sandbox
+
+This tool decodes CAN traffic log files in several text formats (ASC, LOG, TRC, OUT, and ROS) and prints the content to the console. A sample log file is provided.
 ```bash
 VirtualBox:~/src/J1939$ bin/can_sandbox
 Usage: can_sandbox <options>
@@ -68,7 +69,7 @@ Usage: can_sandbox <options>
     -quiet		Do not show the stream content.
 
 ```
-##### Using can_sandbox to decode a CAN stream from the log file or a physical CAN port (socket CAN interface).
+##### Decoding a CAN stream from a log file or a physical CAN port (SocketCAN interface)
 ```bash
 virtualBox:~/src/J1939$ bin/can_sandbox -in candump.out -dbc tests/dbc/truck_messages.dbc
          0.000000 EEC1 PGN:F004(61444) SA:0(0) Prio:3 Data(8): FFFF0FFF0C0C1CFF { EngTorqueMode: 255 ActlEngPrcntTorqueHighResolution: 1 DriversDemandEngPercentTorque: 130 A
@@ -86,17 +87,18 @@ Average bus load: 8000.47 bytes/sec; duration: 23.615 sec.
 ```
 
 ##### PGN format
-The first one produces a single file where **all input DBC files** are compiled into a single std::map:
+The first format produces a single file where **all input DBC files** are compiled into one `std::map`:
 ```c++
 std::map<uint32_t, PGN> truck_messages_dbc = {
         . . .
 };
 ```
-J1939 class can use this map to decode/encode arbitrary CAN frame (take a look at the can_sandbox.cpp for details.) 
-Note: by default, the names of the first input DBC file will be used to build the map name (i.e. "truck_messages.dbc" -> "truck_messages_dbc"). If needed, it could be overriden by using "-name" command line option. 
+The `J1939` class uses this map to decode/encode arbitrary CAN frames (see `can_sandbox.cpp` for details).
+Note: by default, the name of the first input DBC file is used to build the map name (e.g., `truck_messages.dbc` → `truck_messages_dbc`). This can be overridden with the `-name` command-line option.
+
 ##### Union format
-The second format places a bytes buffer and a packed structure of bitfields into an unnamed union which is saved into a header file.
-*Note: a single header file will be generated for all listed input DBC files*
+The second format packs a byte buffer and a bitfield struct into an unnamed union, which is saved to a header file.
+*Note: a single header file is generated for all listed input DBC files.*
 ```c++
 #define CTLEGO_MESSAGE_ID	0x8c210253
 #define CTLEGO_MESSAGE_DLC	6
@@ -130,8 +132,9 @@ struct ctlego_message_t {
 
 };
 ```
-As you can see, this header file can be used even in a C code, if it is necessary, although the C++ would also provide the convenient getters/setters and fillFrameWith() methods.
-DBC compiler also generates another structure which places all messages into a single union tp simplify the processing:
+This header can be used from C code if necessary, though C++ also gets the convenience of getters/setters and the `fillFrameWith()` method.
+
+The DBC compiler also generates a second structure that places all messages into a single union to simplify processing:
 ```c++
 struct all_xyz_messages_t {
     const uint16_t max_dlc_ = 8;
@@ -147,4 +150,4 @@ struct all_xyz_messages_t {
     };
 };
 ```
-*Note: the name of that union will be taken from the first input DBC file name (i.e. xyz_messages.dbc -> all_xyz_messages_t).
+*Note: the name of that union is taken from the first input DBC file's name (e.g., `xyz_messages.dbc` → `all_xyz_messages_t`).*
