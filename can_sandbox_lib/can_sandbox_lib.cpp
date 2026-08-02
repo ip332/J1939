@@ -35,7 +35,7 @@ bool CanSandbox::parseOptions(int argc, const char **argv) {
         output_ = CanStreamFor(output_stream_);
         if (!output_ ||
                 (!output_->realPort() && !output_->open(output_stream_, true))) {
-            std::cerr << "Cannot open channel " << input_stream_ << " for reading." << std::endl;
+            std::cerr << "Cannot open channel " << output_stream_ << " for writing." << std::endl;
             return false;
         }
     }
@@ -78,21 +78,6 @@ void CanSandbox::startProcessing() {
     while (true) {
         frame.reset();
         bool parsed = input_->get(&frame);
-        if (!input_->dataAvailable()) {
-            // Try to re-open CAN interface
-            if (input_->realPort()) {
-                input_->close();
-                sleep(1);
-                input_->open(input_stream_);
-                continue;
-            } else {
-                if (rewind_) {
-                    input_->rewind();
-                    continue;
-                }
-                break;
-            }
-        }
         if (parsed) {
             if (start_time == 0) {
                 last_time = start_time = frame.time_ns_;
@@ -100,10 +85,9 @@ void CanSandbox::startProcessing() {
             if ((output_ && output_->realPort())) {
                 if (!output_->ready()) {
                     sleep(1);
-                    if (!output_->open(input_stream_)) {
+                    if (!output_->open(output_stream_)) {
                         continue;
                     }
-                    continue;
                 }
                 // Simulate real CAN bus timing.
                 if (!input_->realPort()) {
@@ -123,6 +107,13 @@ void CanSandbox::startProcessing() {
                     continue;
                 }
             }
+            // Count this physical frame's own bytes for the bus-load stats below,
+            // before a multi-frame transfer (if any) substitutes the reassembled
+            // logical message for `frame` — otherwise a transfer spanning N physical
+            // frames would be counted as a single message of up to 1758 bytes instead
+            // of N frames of up to 8 bytes each.
+            counter++;
+            size += frame.dlc_;
             if (TransportProtocol::longMessage(frame)) {
                 auto long_message_completed = transportProtocol.handleCanFrame(frame);
                 if (!long_message_completed) {
@@ -134,10 +125,23 @@ void CanSandbox::startProcessing() {
             if (parser_callback_) {
                 parser_callback_(parser);
             }
-            counter++;
-            size += frame.dlc_;
             if (!quiet_) {
                 printMessage(parser, frame.time_ns_ / 1E9, show_unset_bits_);
+            }
+        }
+        if (!input_->dataAvailable()) {
+            // Try to re-open CAN interface
+            if (input_->realPort()) {
+                input_->close();
+                sleep(1);
+                input_->open(input_stream_);
+                continue;
+            } else {
+                if (rewind_) {
+                    input_->rewind();
+                    continue;
+                }
+                break;
             }
         }
     }

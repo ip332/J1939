@@ -17,11 +17,6 @@ class CanSandbox {
     // Input/output streams could be defined as CAN interface name (can0) or a file name.
     std::string input_stream_;
     std::string output_stream_;
-    // When commons library is available we can also define input/outputs as channel names from the bridge config.
-    std::string input_channel_;
-    std::string output_channel_;
-    std::string bridge_config_file_;
-    std::string filter_file_;
     // More than one DBC is supported therefore we'll store their names in a vector:
     std::vector<std::string> dbc_paths_;
     // Do not print every message
@@ -63,9 +58,6 @@ public:
     // Defines extra processing for a parsed message
     void setParserCallback(std::function<void(const J1939Parser & parser)> cb) { parser_callback_ = cb; }
 
-#ifdef COMMONS_AVAILABLE
-    std::shared_ptr<DataBridge> bridge() { return bridge_; }
-#endif
     // Start input stream handling.
     void startProcessing();
 };

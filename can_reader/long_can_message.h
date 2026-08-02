@@ -12,13 +12,15 @@
 // delivered using one of the Transport Protocols (BAM, RTS?CTS, etc. - see J1939-21).
 class LongCanMessage : public LongCanMessageIf {
     // Total number of bytes expected.
-    uint16_t expected_size_;
+    uint16_t expected_size_ = 0;
     // Total number of frames expected.
-    uint8_t expected_frames_cnt_;
+    uint8_t expected_frames_cnt_ = 0;
     // Next frame index.
-    uint8_t expected_frame_;
-    // Error flag. Set when an out of order packet is received.
-    bool error_;
+    uint8_t expected_frame_ = 0;
+    // Error flag. Set when an out of order packet is received. Defaults to true so a
+    // frame arriving before any reset() has run (e.g. a capture starting mid-transfer)
+    // is safely rejected instead of reading these otherwise-uninitialized members.
+    bool error_ = true;
 
     void reset(const J1939_frame &frame) override;
 public:

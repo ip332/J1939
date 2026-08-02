@@ -64,10 +64,10 @@ std::unique_ptr<J1939_frame> FastPacketMessage::handleDataFrame(
         return result;
     }
     // Copy the payload into the correct location in the data buffer.
-    size_t size = expected_size_ - message_.dlc_;
-    memcpy(&message_.buffer_[message_.dlc_], &frame.buffer_[1],
-           size < 7 ? size : 7);
-    message_.dlc_ += size;
+    size_t remaining = expected_size_ - message_.dlc_;
+    size_t copy_len = remaining < 7 ? remaining : 7;
+    memcpy(&message_.buffer_[message_.dlc_], &frame.buffer_[1], copy_len);
+    message_.dlc_ += copy_len;
     if (message_.dlc_ == expected_size_) {
         result.reset(new J1939_frame());
         *result = message_;

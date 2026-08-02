@@ -18,9 +18,18 @@ void LongCanMessage::reset(const J1939_frame &frame) {
     //  4 - maximum number of data frames
     //  5,6,7 - PGN of the long message.
     // uint8_t control_byte = frame.buffer_[0];
-    expected_frames_cnt_ = frame.buffer_[3];
+    uint8_t frames_cnt = frame.buffer_[3];
+    uint16_t size = frame.buffer_[1] + (frame.buffer_[2] << 8);
+    // Reject a declared size/frame count that wouldn't fit message_.buffer_ rather than
+    // trusting these untrusted wire values enough to memcpy into it later.
+    if ((frames_cnt == 0) || (size > J1939_frame::max_dlc_) ||
+        ((static_cast<uint32_t>(frames_cnt) - 1) * 7 + 7 > J1939_frame::max_dlc_)) {
+        error_ = true;
+        return;
+    }
+    expected_frames_cnt_ = frames_cnt;
     expected_frame_ = 1;
-    message_.dlc_ = expected_size_ = frame.buffer_[1] + (frame.buffer_[2] << 8);
+    message_.dlc_ = expected_size_ = size;
     message_.pgn_ = frame.buffer_[5] + (frame.buffer_[6] << 8) + (frame.buffer_[7] << 16);
 }
 

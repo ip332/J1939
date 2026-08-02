@@ -9,13 +9,13 @@
 
 class FastPacketMessage : public LongCanMessageIf {
     // Total number of bytes expected (0-223)
-    uint8_t expected_size_;
-    // Next frame index.
-    uint8_t expected_frame_;
+    uint8_t expected_size_ = 0;
     // Sequence counter
-    uint8_t sequence_counter_;
-    // Error flag. Set when an out-of-order packet is received.
-    bool error_;
+    uint8_t sequence_counter_ = 0;
+    // Error flag. Set when an out-of-order packet is received. Defaults to true so a
+    // frame arriving before any reset() has run (e.g. a capture starting mid-transfer)
+    // is safely rejected instead of reading these otherwise-uninitialized members.
+    bool error_ = true;
 
     void reset(const J1939_frame &frame) override;
 public:
