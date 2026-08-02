@@ -79,14 +79,11 @@ target_link_libraries(socket_can_tests GTest::GTest GTest::Main can_streams)
 
 # Sets up (best-effort) and runs the vcan0-based integration tests above. The caller
 # still needs to grant CAP_NET_ADMIN (e.g. `docker run --cap-add=NET_ADMIN`) for the
-# `ip link` step to succeed; the `modprobe` here is a best-effort convenience for
-# environments where the vcan module is already reachable, not a substitute for
-# loading it on the host first (a plain container can't load a brand-new kernel
-# module -- see README.md).
+# `ip link` step to succeed -- see scripts/vcan_tests.sh and README.md. A real script
+# file (rather than inline `sh -c "..."` COMMAND strings) sidesteps CMake/Makefile
+# generators re-quoting nested shell operators across layers.
 add_custom_target(vcan_tests
-    COMMAND sh -c "modprobe vcan 2>/dev/null || true"
-    COMMAND sh -c "ip link show vcan0 >/dev/null 2>&1 || (ip link add dev vcan0 type vcan && ip link set up vcan0)"
-    COMMAND $<TARGET_FILE:socket_can_tests>
+    COMMAND ${CMAKE_SOURCE_DIR}/scripts/vcan_tests.sh $<TARGET_FILE:socket_can_tests>
     DEPENDS socket_can_tests
     COMMENT "Setting up vcan0 (best-effort) and running SocketCanStream integration tests"
 )
