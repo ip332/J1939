@@ -1,34 +1,32 @@
 //
-// Real syscall implementation of CanSocketApi. Diagnostics via perror() live here
-// (rather than in SocketCanStream) so errno is read immediately after the syscall
-// that set it, right where it's still meaningful.
+// Real syscall implementation of CanSocketApi. Pure straight-line passthrough to the
+// underlying syscalls, with no branching/error-diagnostic logic of its own -- that
+// lives in SocketCanStream (the caller), which is what all the failure-path branch
+// coverage exercises via MockCanSocketApi. This keeps errno reads right next to the
+// syscall that set it (no other syscall happens between the two) while leaving this
+// class with nothing left to miss coverage-wise beyond exercising each call once.
+//
+// bind()/write()/read() only do anything meaningful against a real CAN socket bound
+// to a live interface, so they're exercised by socket_can_stream_tests.cpp against
+// vcan0 (needs CAP_NET_ADMIN -- see the vcan_tests CMake target) rather than here.
 //
 
 #include "can_socket_api.h"
 
-#include <cstdio>
 #include <cstring>
 #include <net/if.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
 int RealCanSocketApi::socket() {
-    int fd = ::socket(PF_CAN, SOCK_RAW, CAN_RAW);
-    if (fd < 0) {
-        perror("Socket failed: ");
-    }
-    return fd;
+    return ::socket(PF_CAN, SOCK_RAW, CAN_RAW);
 }
 
 unsigned int RealCanSocketApi::ifNameToIndex(const std::string &name) {
     struct ifreq ifr;
     strncpy(ifr.ifr_name, name.c_str(), IFNAMSIZ - 1);
     ifr.ifr_name[IFNAMSIZ - 1] = '\0';
-    unsigned int ifindex = if_nametoindex(ifr.ifr_name);
-    if (!ifindex) {
-        perror("if_nametoindex failed:");
-    }
-    return ifindex;
+    return if_nametoindex(ifr.ifr_name);
 }
 
 int RealCanSocketApi::bind(int fd, unsigned int ifindex) {
@@ -36,19 +34,11 @@ int RealCanSocketApi::bind(int fd, unsigned int ifindex) {
     memset(&addr, 0, sizeof(addr));
     addr.can_family = AF_CAN;
     addr.can_ifindex = ifindex;
-    int ret = ::bind(fd, (struct sockaddr *) &addr, sizeof(addr));
-    if (ret < 0) {
-        perror("Bind failed: ");
-    }
-    return ret;
+    return ::bind(fd, (struct sockaddr *) &addr, sizeof(addr));
 }
 
 ssize_t RealCanSocketApi::write(int fd, const struct canfd_frame &frame, size_t len) {
-    ssize_t ret = ::write(fd, &frame, len);
-    if (ret != static_cast<ssize_t>(len)) {
-        perror("Write failed: ");
-    }
-    return ret;
+    return ::write(fd, &frame, len);
 }
 
 ssize_t RealCanSocketApi::read(int fd, struct canfd_frame *frame, size_t len) {

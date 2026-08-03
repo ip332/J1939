@@ -4,6 +4,7 @@
 
 #include "socket_can_stream.h"
 
+#include <cstdio>
 #include <cstring>
 #include <chrono>
 
@@ -14,17 +15,20 @@ bool SocketCanStream::open(const std::string &port, bool /*write*/) {
     real_port = true;
     fd_ = api_->socket();
     if (fd_ < 0) {
+        perror("Socket failed: ");
         return false;
     }
 
     unsigned int ifindex = api_->ifNameToIndex(port);
     if (!ifindex) {
+        perror("if_nametoindex failed:");
         api_->close(fd_);
         fd_ = -1;
         return false;
     }
 
     if (api_->bind(fd_, ifindex) < 0) {
+        perror("Bind failed: ");
         api_->close(fd_);
         fd_ = -1;
         return false;
@@ -47,6 +51,7 @@ bool SocketCanStream::put(const struct J1939_frame &frame) const {
     int mtu = 16; // CAN ID + 4 padding bytes + 8 bytes of data.
     ssize_t ret = api_->write(fd_, canfd, mtu);
     if (ret != mtu) {
+        perror("Write failed: ");
         return false;
     }
     return true;
