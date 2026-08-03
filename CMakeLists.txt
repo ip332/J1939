@@ -109,11 +109,15 @@ add_custom_target(vcan_tests
 if(ENABLE_COVERAGE)
     find_program(GCOVR_EXECUTABLE gcovr)
     if(GCOVR_EXECUTABLE)
+        # Floored slightly below the actual achieved numbers (97.9% line / 93.4%
+        # branch as of this writing) so gcovr's own exit code (4) fails the build on a
+        # real regression without being brittle against insignificant rounding noise.
         add_custom_target(coverage
             COMMAND $<TARGET_FILE:all_tests>
             COMMAND ${GCOVR_EXECUTABLE} --root ${CMAKE_SOURCE_DIR}
                     --exclude '.*_tests?\.cpp$$' --exclude '.*/build/.*'
                     --exclude-throw-branches
+                    --fail-under-line 97.8 --fail-under-branch 93.3
                     --print-summary
                     --html-details ${CMAKE_BINARY_DIR}/coverage.html
                     --txt ${CMAKE_BINARY_DIR}/coverage.txt

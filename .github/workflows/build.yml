@@ -11,7 +11,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build and test via Docker
-        run: docker build .
+        run: docker build -t j1939 .
+      - name: Check coverage hasn't regressed
+        run: |
+          docker run --rm j1939 sh -c "
+            cmake -S /src -B /src/build_cov -DENABLE_COVERAGE=ON &&
+            cmake --build /src/build_cov --target coverage"
 
   vcan-tests:
     runs-on: ubuntu-latest
