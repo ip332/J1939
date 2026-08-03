@@ -1,3 +1,10 @@
+# J1939
+
+[![Build](https://github.com/ip332/j1939/actions/workflows/build.yml/badge.svg)](https://github.com/ip332/j1939/actions/workflows/build.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+A C++17 library for encoding and decoding J1939/CAN frames, plus a DBC compiler that turns `.dbc` files into compact, statically-typed C/C++ code — no runtime parsing, no dynamic allocation, suitable for safety-critical ECU code.
+
 ## Summary
 
 The `J1939` repository provides a library for encoding and decoding CAN frames, along with tools to compile DBC files into a compact, generated data format.
@@ -160,3 +167,6 @@ struct all_xyz_messages_t {
 };
 ```
 *Note: the name of that union is taken from the first input DBC file's name (e.g., `xyz_messages.dbc` → `all_xyz_messages_t`).*
+
+## License
+This project is licensed under the MIT License -- see [LICENSE](LICENSE) for details.
