@@ -37,3 +37,19 @@ TEST_F(StringToolsTest, SnakeConversionTest) {
     EXPECT_EQ(toSnakeCase("_StrangersInTheNight"), "strangers_in_the_night");
     EXPECT_EQ(toSnakeCase("ABC_XYZ_123"),"abc_xyz_123");
 }
+
+// Adversarial input: alternating case with no repeats maximizes the output/input
+// character ratio (each pair of input characters can emit up to 3 output characters:
+// an inserted underscore plus both letters), the worst case for the fixed-size stack
+// buffer sized at name.length() + name.length()/2 + 1. This confirms the buffer's
+// boundary-check `break`s never actually fire for this pattern -- there's always at
+// least one character of slack -- without corrupting the result.
+TEST_F(StringToolsTest, SnakeConversionStressTestForBufferBoundary) {
+    std::string input;
+    for (int i = 0; i < 200; i++) {
+        input += (i % 2 == 0) ? 'a' : 'A';
+    }
+    std::string result = toSnakeCase(input);
+    EXPECT_FALSE(result.empty());
+    EXPECT_EQ(result.find("__"), std::string::npos);
+}

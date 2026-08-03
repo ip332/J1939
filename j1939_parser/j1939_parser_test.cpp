@@ -181,6 +181,57 @@ TEST_F(J1939ParserTest, SignedSignalsTest) {
 }
 
 
+TEST_F(J1939ParserTest, SignalLookupsReturnNullWhenPgnIsUnknown) {
+    frame_.reset();
+    frame_.setFrom(9999); // not a TEST_DBC key
+    EXPECT_EQ(parser_->signal("Signal1"), nullptr);
+    EXPECT_EQ(parser_->signalRawValue(SPN{"Signal1", 0, 1, false, true, 1, 0, 0, 0, {}}).get(), nullptr);
+    EXPECT_EQ(parser_->signalRawValue("Signal1").get(), nullptr);
+    EXPECT_EQ(parser_->signalRawValue32("Signal1").get(), nullptr);
+    EXPECT_EQ(parser_->signalValue("Signal1").get(), nullptr);
+    EXPECT_FALSE(parser_->setSignalValue("Signal1", 1.0));
+    EXPECT_FALSE(parser_->setSignalValue("Signal1", std::string("On")));
+}
+
+TEST_F(J1939ParserTest, SignalRawValue32HidesUnsetValueUnlessRequested) {
+    frame_.reset();
+    frame_.setFrom(1234);
+    frame_.dlc_ = TEST_DBC.at(1234).dlc_;
+    memset(frame_.buffer_, 0xFF, sizeof(frame_.buffer_)); // Signal2 now reads as "unset"
+    EXPECT_EQ(parser_->signalRawValue32("Signal2", false).get(), nullptr);
+    EXPECT_NE(parser_->signalRawValue32("Signal2", true).get(), nullptr);
+
+    parser_->setSignalValue("Signal2", 5); // now a real (non-masked) value
+    auto value = parser_->signalRawValue32("Signal2", false);
+    ASSERT_NE(value.get(), nullptr);
+    EXPECT_EQ(*value, 5u);
+}
+
+TEST_F(J1939ParserTest, SetSignalValueRejectsUnknownSignalName) {
+    frame_.reset();
+    frame_.setFrom(1234);
+    frame_.dlc_ = TEST_DBC.at(1234).dlc_;
+    EXPECT_FALSE(parser_->setSignalValue("NoSuchSignal", 1.0));
+    EXPECT_FALSE(parser_->setSignalValue("NoSuchSignal", std::string("On")));
+}
+
+TEST_F(J1939ParserTest, SetSignalValueNegativeWithScaling) {
+    const std::map<uint32_t, PGN> dbc{
+        {999, {"Scaled", 1, {{"Temp", 0, 8, true, true, 0.5, 10, 0, 0, {}}}}},
+    };
+    J1939_frame frame;
+    frame.reset();
+    frame.setFrom(999);
+    frame.dlc_ = 1;
+    J1939Parser parser(frame, dbc);
+    // scalar_ != 1, so the scaled path runs; a negative value hits its own branch
+    // (distinct rounding direction from the non-negative scaled branch).
+    EXPECT_TRUE(parser.setSignalValue("Temp", -5.0));
+    auto value = parser.signalValue("Temp", true);
+    ASSERT_TRUE(value);
+    EXPECT_DOUBLE_EQ(*value, -5.0);
+}
+
 TEST_F(J1939ParserTest, ParserRuntimeMessageFindTest) {
     ASSERT_TRUE(setDbc("test_database.dbc"));
 
@@ -324,6 +375,107 @@ TEST_F(J1939ParserTest, SetValuesRadarBigEndianTest) {
 
     uint8_t expected[2] = {0x80, 0};
     EXPECT_EQ(memcmp(expected, frame_.buffer_, frame_.dlc_), 0);
+}
+
+TEST_F(J1939ParserTest, GetPgnFallsBackToPgnKeyLookup) {
+    frame_.reset();
+    frame_.pgn_ = 1234; // matches a TEST_DBC key directly
+    frame_.pri_ = 7;
+    frame_.src_ = 0x55;
+    frame_.dst_ = 0xFF;
+    // canID() bakes in pri_/src_/dst_, so it no longer equals the raw PGN value --
+    // the first (canID()-keyed) lookup must miss for the PGN-keyed fallback to be
+    // what actually finds this entry.
+    ASSERT_NE(frame_.canID(), 1234u);
+    EXPECT_NE(parser_->getPgn(), nullptr);
+}
+
+TEST_F(J1939ParserTest, ScanAllSignalsSkipsUnsetSignalsByDefault) {
+    frame_.reset();
+    frame_.setFrom(1234);
+    frame_.dlc_ = TEST_DBC.at(1234).dlc_;
+    memset(frame_.buffer_, 0xFF, sizeof(frame_.buffer_)); // every signal "unset"
+    parser_->setSignalValue("Signal2", 5); // one real value amid the rest
+
+    std::vector<std::string> seen;
+    parser_->scanAllSignals([&](const SPN &spn) { seen.push_back(spn.name_); }, false);
+    EXPECT_EQ(seen, std::vector<std::string>{"Signal2"});
+}
+
+TEST_F(J1939ParserTest, ScanAllSignalsIncludesUnsetSignalsWhenRequested) {
+    frame_.reset();
+    frame_.setFrom(1234);
+    frame_.dlc_ = TEST_DBC.at(1234).dlc_;
+    memset(frame_.buffer_, 0xFF, sizeof(frame_.buffer_));
+
+    std::vector<std::string> seen;
+    parser_->scanAllSignals([&](const SPN &spn) { seen.push_back(spn.name_); }, true);
+    EXPECT_EQ(seen.size(), TEST_DBC.at(1234).signals_.size());
+}
+
+TEST_F(J1939ParserTest, ScanAllSignalsSkipsSignalsThatDontFitInDlc) {
+    frame_.reset();
+    frame_.setFrom(5678); // LongSignals: 8 signals of 64 bits (8 bytes) each
+    frame_.dlc_ = 8;      // only enough room for the first signal
+    std::vector<std::string> seen;
+    parser_->scanAllSignals([&](const SPN &spn) { seen.push_back(spn.name_); }, true);
+    EXPECT_EQ(seen, std::vector<std::string>{"LongSignal1"});
+}
+
+TEST(J1939ParserEnumTest, SetSignalValueByEnumName) {
+    const std::map<uint32_t, PGN> dbc{
+        {999, {"WithEnum", 1,
+               {{"Mode", 0, 2, false, true, 1, 0, 0, 3, {{1, "On"}, {2, "Off"}}}}}},
+    };
+    J1939_frame frame;
+    frame.reset();
+    frame.setFrom(999);
+    frame.dlc_ = 1;
+    J1939Parser parser(frame, dbc);
+
+    EXPECT_TRUE(parser.setSignalValue("Mode", std::string("On")));
+    auto value = parser.signalRawValue("Mode");
+    ASSERT_TRUE(value);
+    EXPECT_EQ(*value, 1u);
+
+    EXPECT_FALSE(parser.setSignalValue("Mode", std::string("NotARealEnumName")));
+}
+
+TEST(J1939ParserPgnForTest, FindsPgnsContainingASignal) {
+    auto pgns = J1939Parser::pgnFor("Signal1", TEST_DBC);
+    EXPECT_EQ(pgns, std::set<uint32_t>{1234});
+}
+
+TEST(J1939ParserPgnForTest, ReturnsEmptySetForUnknownSignal) {
+    auto pgns = J1939Parser::pgnFor("NoSuchSignal", TEST_DBC);
+    EXPECT_TRUE(pgns.empty());
+}
+
+TEST_F(J1939ParserTest, ToStringOnExtendedFrameUsesExtendedFormat) {
+    frame_.reset();
+    // Set pgn_ directly rather than via setFrom(): canID() bakes in extended_, so
+    // setting it after setFrom() would change what canID() computes and break the
+    // PGN lookup -- setting pgn_ directly makes the PGN-key fallback find it
+    // regardless of extended_/canID().
+    frame_.pgn_ = 1234;
+    frame_.extended_ = true;
+    frame_.dlc_ = TEST_DBC.at(1234).dlc_;
+
+    std::stringstream stream;
+    parser_->toString(stream);
+    // The extended-frame branch prints "SA:...DST:...Prio:" instead of "CAN ID:".
+    EXPECT_NE(stream.str().find("SA:"), std::string::npos);
+    EXPECT_NE(stream.str().find("DST:"), std::string::npos);
+}
+
+TEST_F(J1939ParserTest, ToStringOnUndefinedExtendedFrameUsesExtendedFormat) {
+    frame_.reset();
+    frame_.setFrom(0x00FFFFFF); // not present in TEST_DBC
+    frame_.extended_ = true;
+
+    std::stringstream stream;
+    parser_->toString(stream);
+    EXPECT_NE(stream.str().find("UNDEF_"), std::string::npos);
 }
 
 TEST_F(J1939ParserTest, SetValuesConfigBigEndianTest) {

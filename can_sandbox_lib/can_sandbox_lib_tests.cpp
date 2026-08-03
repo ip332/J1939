@@ -8,6 +8,7 @@
 #include "can_sandbox_lib.h"
 #include "mock_can_stream.h"
 
+#include <cstdio>
 #include <gtest/gtest.h>
 
 namespace {
@@ -25,6 +26,90 @@ J1939_frame makeFrame(uint32_t pgn, uint8_t src, const uint8_t data[8]) {
 }
 
 } // namespace
+
+class CanSandboxParseOptionsTest : public testing::Test {
+protected:
+    void TearDown() override {
+        for (const auto &path : temp_paths_) {
+            remove(path.c_str());
+        }
+    }
+
+    // Writes `content` to a fresh temp file with the given extension and returns its
+    // path. parseOptions() integrates with the real filesystem via CanStreamFor(), so
+    // this needs real files rather than the MockCanStream injection seam.
+    std::string writeTemp(const std::string &content, const char *suffix) {
+        std::string path = "/tmp/can_sandbox_test_XXXXXX" + std::string(suffix);
+        std::vector<char> buf(path.begin(), path.end());
+        buf.push_back('\0');
+        int fd = mkstemps(buf.data(), static_cast<int>(strlen(suffix)));
+        FILE *f = fdopen(fd, "w");
+        fwrite(content.data(), 1, content.size(), f);
+        fclose(f);
+        std::string result(buf.data());
+        temp_paths_.push_back(result);
+        return result;
+    }
+
+    std::vector<std::string> temp_paths_;
+};
+
+TEST_F(CanSandboxParseOptionsTest, FailsWithNoInputAndPrintsUsage) {
+    CanSandbox sandbox;
+    const char *argv[] = {"prog"};
+    EXPECT_FALSE(sandbox.parseOptions(1, argv));
+}
+
+TEST_F(CanSandboxParseOptionsTest, FailsWithAnUnrecognizedFlag) {
+    CanSandbox sandbox;
+    const char *argv[] = {"prog", "-not-a-real-flag"};
+    EXPECT_FALSE(sandbox.parseOptions(2, argv));
+}
+
+TEST_F(CanSandboxParseOptionsTest, SucceedsWithAValidInputFile) {
+    std::string path = writeTemp("(1557265716.818982) can0 0CFF0686#F22700F2FFFFFF5F\n", ".log");
+    CanSandbox sandbox;
+    const char *argv[] = {"prog", "-in", path.c_str()};
+    EXPECT_TRUE(sandbox.parseOptions(3, argv));
+}
+
+TEST_F(CanSandboxParseOptionsTest, FailsWithNonexistentInputFile) {
+    CanSandbox sandbox;
+    const char *argv[] = {"prog", "-in", "/nonexistent/path/does_not_exist.log"};
+    EXPECT_FALSE(sandbox.parseOptions(3, argv));
+}
+
+TEST_F(CanSandboxParseOptionsTest, FailsWithOutputInAnUnwritableLocation) {
+    std::string in_path = writeTemp("", ".log");
+    CanSandbox sandbox;
+    const char *argv[] = {"prog", "-in", in_path.c_str(), "-out", "/nonexistent_dir/out.log"};
+    EXPECT_FALSE(sandbox.parseOptions(5, argv));
+}
+
+TEST_F(CanSandboxParseOptionsTest, SucceedsWithAValidOutputFile) {
+    std::string in_path = writeTemp("", ".log");
+    std::string out_path = "/tmp/can_sandbox_test_out.log";
+    CanSandbox sandbox;
+    const char *argv[] = {"prog", "-in", in_path.c_str(), "-out", out_path.c_str()};
+    EXPECT_TRUE(sandbox.parseOptions(5, argv));
+    remove(out_path.c_str());
+}
+
+TEST_F(CanSandboxParseOptionsTest, FailsWithABadDbcFile) {
+    // DbcParser::parseFile() is lenient about content (unrecognized lines are just
+    // skipped) -- it only fails on a non-.dbc extension or a file it can't open.
+    std::string in_path = writeTemp("", ".log");
+    CanSandbox sandbox;
+    const char *argv[] = {"prog", "-in", in_path.c_str(), "-dbc", "/nonexistent/path.dbc"};
+    EXPECT_FALSE(sandbox.parseOptions(5, argv));
+}
+
+TEST_F(CanSandboxParseOptionsTest, SucceedsWithAValidDbcFile) {
+    std::string in_path = writeTemp("", ".log");
+    CanSandbox sandbox;
+    const char *argv[] = {"prog", "-in", in_path.c_str(), "-dbc", DBC_FOLDER "test_database.dbc"};
+    EXPECT_TRUE(sandbox.parseOptions(5, argv));
+}
 
 TEST(CanSandboxTest, RoundTripsFramesFromMockInput) {
     auto input = std::make_unique<MockCanStream>();
@@ -116,4 +201,51 @@ TEST(CanSandboxTest, ReconnectsRealPortOutputUsingCorrectStreamName) {
     for (const auto &name : output_ptr->openCalls()) {
         EXPECT_EQ(name, "mock-output");
     }
+}
+
+TEST(CanSandboxTest, SimulatesRealBusTimingWhenReplayingToARealPortOutput) {
+    // Needs: input NOT a real port (so timing simulation applies), output IS a real
+    // port and ready, and a second frame with time_ns_ strictly greater than the
+    // first's -- otherwise the `frame.time_ns_ > last_time` branch never triggers.
+    auto input = std::make_unique<MockCanStream>();
+    const uint8_t data[8] = {1, 2, 3, 4, 5, 6, 7, 8};
+    J1939_frame frame1 = makeFrame(0x00FEF100, 0x11, data);
+    frame1.time_ns_ = 1000000;
+    J1939_frame frame2 = makeFrame(0x00FEF100, 0x11, data);
+    frame2.time_ns_ = 6000000; // 5ms later -> a short, bounded usleep()
+    input->enqueueFrame(frame1);
+    input->enqueueFrame(frame2);
+
+    auto output = std::make_unique<MockCanStream>();
+    output->setRealPort(true);
+    MockCanStream *output_ptr = output.get();
+
+    CanSandbox sandbox;
+    sandbox.setInputStream(std::move(input));
+    sandbox.setOutputStream(std::move(output));
+
+    sandbox.startProcessing();
+
+    EXPECT_EQ(output_ptr->written().size(), 2u);
+}
+
+TEST(CanSandboxTest, ReconnectsRealPortOutputAfterAPutFailure) {
+    auto input = std::make_unique<MockCanStream>();
+    const uint8_t data[8] = {1, 2, 3, 4, 5, 6, 7, 8};
+    input->enqueueFrame(makeFrame(0x00FEF100, 0x11, data));
+
+    auto output = std::make_unique<MockCanStream>();
+    output->setRealPort(true);
+    output->failPut(true); // every put() fails -> triggers close/reopen
+    MockCanStream *output_ptr = output.get();
+
+    CanSandbox sandbox;
+    sandbox.setInputStream(std::move(input));
+    sandbox.setOutputStream(std::move(output), "mock-output");
+
+    sandbox.startProcessing();
+
+    EXPECT_TRUE(output_ptr->written().empty()); // put() always failed
+    ASSERT_FALSE(output_ptr->openCalls().empty());
+    EXPECT_EQ(output_ptr->openCalls().back(), "mock-output");
 }

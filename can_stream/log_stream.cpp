@@ -5,7 +5,10 @@
 #include "log_stream.h"
 
 bool LogStream::put(const J1939_frame & frame) const {
-    fprintf(file_, "(%17.6f) can0 %.8X#",frame.time_ns_ / 1E9, frame.canID());
+    // Zero-padded (not space-padded): get_fields() tokenizes on any whitespace, so a
+    // space-padded small time value (e.g. "(         0.000000)") would fragment into
+    // multiple fields and become unparseable by get() below.
+    fprintf(file_, "(%017.6f) can0 %.8X#",frame.time_ns_ / 1E9, frame.canID());
     for(int i = 0; i < frame.dlc_; i++) {
         fprintf(file_, "%.2X", frame.buffer_[i]);
     }

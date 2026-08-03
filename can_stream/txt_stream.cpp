@@ -53,7 +53,10 @@ bool TxtStream::get(J1939_frame *frame) {
 
 bool TxtStream::put(const J1939_frame & frame) const {
     if (frame.time_ns_ != 0) {
-        fprintf(file_, " (%17.6f)",frame.time_ns_ / 1E9);
+        // Zero-padded (not space-padded): get_fields() tokenizes on any whitespace,
+        // so a space-padded small time value would fragment into multiple fields
+        // and become unparseable by get() below.
+        fprintf(file_, " (%017.6f)",frame.time_ns_ / 1E9);
     }
     fprintf(file_, "  can0  %.8X   [%d]  ", frame.canID(), frame.dlc_);
     for(int i = 0; i < frame.dlc_; i++) {

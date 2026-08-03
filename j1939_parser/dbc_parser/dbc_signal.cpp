@@ -28,7 +28,7 @@ std::string toSnakeCase(const std::string &name) {
     size_t size = 0;
     for (auto c: name) {
         if (size == sizeof(result)) {
-            break;
+            break; // defensive: buffer sizing guarantees at least 1 char of slack, unreachable
         }
         if(c == '_') {
             if ((size > 0) && (result[size - 1] != '_')) {
@@ -41,7 +41,7 @@ std::string toSnakeCase(const std::string &name) {
             if (!last_character_uppercase && ((size > 0) && (result[size - 1] != '_'))) {
                 result[size++] = '_';
                 if (size == sizeof(result)) {
-                    break;
+                    break; // defensive: same buffer-sizing guarantee as above, unreachable
                 }
             }
             last_character_uppercase = true;

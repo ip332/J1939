@@ -10,6 +10,8 @@
 #include "out_stream.h"
 #include "trc_stream.h"
 #include "txt_stream.h"
+#include "can_stream.h"
+#include "mock_can_stream.h"
 
 #include <cstdio>
 #include <cstring>
@@ -166,6 +168,116 @@ TEST_F(CanStreamTest, AscStreamRejectsAbsurdDeclaredLength) {
     EXPECT_FALSE(ok);
 }
 
+TEST_F(CanStreamTest, AscStreamParsesEveryMonthAbbreviation) {
+    AscStream stream;
+    std::string path = writeTemp(
+        "date x Jun 1 01:01:01 am 2020\n"
+        "date x Jul 1 01:01:01 am 2020\n"
+        "date x Aug 1 01:01:01 am 2020\n"
+        "date x Sep 1 01:01:01 am 2020\n"
+        "date x Oct 1 01:01:01 am 2020\n"
+        "date x Nov 1 01:01:01 pm 2020\n"
+        "date x Dec 1 01:01:01 am 2020\n"
+        "date x Xxx 1 01:01:01 am 2020\n"); // unrecognized month
+    ASSERT_TRUE(stream.open(path));
+    J1939_frame frame;
+    // Every "date" line returns false (it only updates internal state); just confirm
+    // none of them crash and all 8 lines get consumed.
+    for (int i = 0; i < 8; i++) {
+        EXPECT_FALSE(stream.get(&frame));
+    }
+}
+
+TEST_F(CanStreamTest, AscStreamRejectsTruncatedDateLine) {
+    J1939_frame frame;
+    bool ok = decodeFirstDataLine<AscStream>("date x Jun 1\n", &frame);
+    EXPECT_FALSE(ok);
+}
+
+TEST_F(CanStreamTest, AscStreamDecodesDecimalModeLine) {
+    J1939_frame frame;
+    bool ok = decodeFirstDataLine<AscStream>(
+        "base dec  timestamps absolute\n"
+        "7.000000 1  100  Rx   d 2 010 020\n", &frame);
+    EXPECT_TRUE(ok);
+    EXPECT_EQ(frame.dlc_, 2);
+    EXPECT_EQ(frame.buffer_[0], 10);
+    EXPECT_EQ(frame.buffer_[1], 20);
+}
+
+TEST_F(CanStreamTest, AscStreamAbortsOnSecondChannel) {
+    J1939_frame frame;
+    bool ok = decodeFirstDataLine<AscStream>(
+        "7.000000 2  CFF2100x  Rx  d 8 00 00 32 00 32 00 00 0B\n", &frame);
+    EXPECT_FALSE(ok);
+}
+
+TEST_F(CanStreamTest, LogStreamPutWritesAndReadsBackAFrame) {
+    std::string path = writeTemp("");
+    LogStream out;
+    ASSERT_TRUE(out.open(path, true));
+    J1939_frame sent;
+    const uint8_t payload[8] = {1, 2, 3, 4, 5, 6, 7, 8};
+    ASSERT_TRUE(sent.setFrom(0x18FEF100, payload, 8));
+    EXPECT_TRUE(out.put(sent));
+    out.close();
+
+    LogStream in;
+    ASSERT_TRUE(in.open(path));
+    J1939_frame received;
+    ASSERT_TRUE(in.get(&received));
+    EXPECT_EQ(received.dlc_, 8);
+    EXPECT_EQ(received.buffer_[0], 1);
+}
+
+TEST_F(CanStreamTest, LogStreamRejectsLineWithoutOpeningParen) {
+    J1939_frame frame;
+    bool ok = decodeFirstDataLine<LogStream>("not a log line\n", &frame);
+    EXPECT_FALSE(ok);
+}
+
+TEST_F(CanStreamTest, LogStreamRejectsLineWithoutClosingParen) {
+    J1939_frame frame;
+    bool ok = decodeFirstDataLine<LogStream>("(1557265716.818982 can0 0CFF0686#F2\n", &frame);
+    EXPECT_FALSE(ok);
+}
+
+TEST_F(CanStreamTest, LogStreamRejectsLineWithoutHashSeparator) {
+    J1939_frame frame;
+    bool ok = decodeFirstDataLine<LogStream>("(1557265716.818982) can0 0CFF0686\n", &frame);
+    EXPECT_FALSE(ok);
+}
+
+TEST_F(CanStreamTest, OutStreamRejectsTooFewFields) {
+    J1939_frame frame;
+    bool ok = decodeFirstDataLine<OutStream>("<\n", &frame);
+    EXPECT_FALSE(ok);
+}
+
+TEST_F(CanStreamTest, OutStreamRejectsMissingHexPrefix) {
+    J1939_frame frame;
+    bool ok = decodeFirstDataLine<OutStream>("<0cf00400> [8] ff ff ff 0c 1c ff f4 7d\n", &frame);
+    EXPECT_FALSE(ok);
+}
+
+TEST_F(CanStreamTest, OutStreamRejectsMissingClosingAngleBracket) {
+    J1939_frame frame;
+    bool ok = decodeFirstDataLine<OutStream>("<0x0cf00400 [8] ff ff ff 0c 1c ff f4 7d\n", &frame);
+    EXPECT_FALSE(ok);
+}
+
+TEST_F(CanStreamTest, OutStreamRejectsMissingClosingBracket) {
+    J1939_frame frame;
+    bool ok = decodeFirstDataLine<OutStream>("<0x0cf00400> [8 ff ff ff 0c 1c ff f4 7d\n", &frame);
+    EXPECT_FALSE(ok);
+}
+
+TEST_F(CanStreamTest, OutStreamRejectsNonNumericLength) {
+    J1939_frame frame;
+    bool ok = decodeFirstDataLine<OutStream>("<0x0cf00400> [abc] ff ff ff 0c\n", &frame);
+    EXPECT_FALSE(ok);
+}
+
 TEST_F(CanStreamTest, TxtStreamDecodesPlainCandumpLine) {
     J1939_frame frame;
     bool ok = decodeFirstDataLine<TxtStream>(
@@ -174,4 +286,190 @@ TEST_F(CanStreamTest, TxtStreamDecodesPlainCandumpLine) {
     EXPECT_EQ(frame.dlc_, 8);
     EXPECT_EQ(frame.buffer_[0], 0x20);
     EXPECT_EQ(frame.buffer_[5], 0x64);
+}
+
+TEST_F(CanStreamTest, TxtStreamDecodesLineWithTimestamp) {
+    J1939_frame frame;
+    bool ok = decodeFirstDataLine<TxtStream>(
+        "(1657126380.578519)  can0  01A   [8]  11 22 33 44 AA BB CC DD\n", &frame);
+    ASSERT_TRUE(ok);
+    EXPECT_EQ(frame.dlc_, 8);
+    EXPECT_EQ(frame.buffer_[0], 0x11);
+    EXPECT_EQ(frame.time_ns_, static_cast<uint64_t>(1657126380.578519 * 1E9));
+}
+
+TEST_F(CanStreamTest, TxtStreamRejectsLineWithUnterminatedTimestamp) {
+    J1939_frame frame;
+    bool ok = decodeFirstDataLine<TxtStream>("(1657126380.578519  can0  01A [8] 11\n", &frame);
+    EXPECT_FALSE(ok);
+}
+
+TEST_F(CanStreamTest, TxtStreamRejectsTooFewFields) {
+    J1939_frame frame;
+    bool ok = decodeFirstDataLine<TxtStream>("can0 01A\n", &frame);
+    EXPECT_FALSE(ok);
+}
+
+TEST_F(CanStreamTest, TxtStreamRejectsUnparsableDataToken) {
+    J1939_frame frame;
+    bool ok = decodeFirstDataLine<TxtStream>("can0  19F21200   [8]  ZZ\n", &frame);
+    EXPECT_FALSE(ok);
+}
+
+TEST_F(CanStreamTest, SetExtendedOrsTheExtendedBitIntoDecodedFrames) {
+    std::string path = writeTemp("can0  19F21200   [8]  20 0B 01 01 00 64 FF FF\n");
+    TxtStream stream;
+    ASSERT_TRUE(stream.open(path));
+    stream.setExtended(true);
+    J1939_frame frame;
+    ASSERT_TRUE(stream.get(&frame));
+    EXPECT_TRUE(frame.extended_);
+}
+
+TEST_F(CanStreamTest, TxtStreamPutWritesAndReadsBackAFrame) {
+    std::string path = writeTemp("");
+    TxtStream out;
+    ASSERT_TRUE(out.open(path, true));
+    J1939_frame sent;
+    const uint8_t payload[8] = {1, 2, 3, 4, 5, 6, 7, 8};
+    ASSERT_TRUE(sent.setFrom(0x18FEF100, payload, 8));
+    sent.time_ns_ = 1234567890;
+    EXPECT_TRUE(out.put(sent));
+    out.close();
+
+    TxtStream in;
+    ASSERT_TRUE(in.open(path));
+    J1939_frame received;
+    ASSERT_TRUE(in.get(&received));
+    EXPECT_EQ(received.dlc_, 8);
+    EXPECT_EQ(received.buffer_[0], 1);
+}
+
+TEST_F(CanStreamTest, TrcStreamRejectsDataLineWithTooFewFields) {
+    J1939_frame frame;
+    bool ok = decodeFirstDataLine<TrcStream>(
+        ";   Start time: 5/29/2019 14:23:52.777.0\n"
+        "     1)      3099.8  Rx\n", &frame);
+    EXPECT_FALSE(ok);
+}
+
+TEST_F(CanStreamTest, TrcStreamRejectsUnparsableHexToken) {
+    // Declared length matches the field count, but a data token itself isn't valid
+    // hex -- a different rejection path than a too-large/too-short declared length.
+    J1939_frame frame;
+    bool ok = decodeFirstDataLine<TrcStream>(
+        ";   Start time: 5/29/2019 14:23:52.777.0\n"
+        "     1)      3099.8  Rx     1CFF6A27  2  ZZ ZZ\n", &frame);
+    EXPECT_FALSE(ok);
+}
+
+TEST_F(CanStreamTest, LogStreamRejectsInvalidHexInDataString) {
+    J1939_frame frame;
+    bool ok = decodeFirstDataLine<LogStream>(
+        "(1557265716.818982) can0 0CFF0686#F2ZZ\n", &frame);
+    EXPECT_FALSE(ok);
+}
+
+TEST_F(CanStreamTest, LogStreamRejectsDataLongerThanMaxDlc) {
+    // Constructs a data string with more than 2*max_dlc_ hex characters so
+    // decodeHexString's count > max_dlc_ guard is the one that rejects it (not a
+    // truncated/malformed line).
+    std::string data(2 * (J1939_frame::max_dlc_ + 8), 'F');
+    J1939_frame frame;
+    bool ok = decodeFirstDataLine<LogStream>(
+        "(1557265716.818982) can0 0CFF0686#" + data + "\n", &frame);
+    EXPECT_FALSE(ok);
+}
+
+TEST_F(CanStreamTest, CanStreamForDispatchesByExtension) {
+    EXPECT_NE(dynamic_cast<AscStream *>(CanStreamFor("sample.asc").get()), nullptr);
+    EXPECT_NE(dynamic_cast<LogStream *>(CanStreamFor("sample.log").get()), nullptr);
+    EXPECT_NE(dynamic_cast<OutStream *>(CanStreamFor("sample.out").get()), nullptr);
+    EXPECT_NE(dynamic_cast<TrcStream *>(CanStreamFor("sample.trc").get()), nullptr);
+    EXPECT_NE(dynamic_cast<TxtStream *>(CanStreamFor("sample.txt").get()), nullptr);
+}
+
+TEST_F(CanStreamTest, CanStreamForFallsBackToSocketCanForUnknownExtension) {
+    auto stream = CanStreamFor("can0");
+    ASSERT_TRUE(stream);
+    // Not one of the file formats, and not a *file*-backed stream at all.
+    EXPECT_EQ(dynamic_cast<AscStream *>(stream.get()), nullptr);
+    EXPECT_EQ(dynamic_cast<LogStream *>(stream.get()), nullptr);
+    // realPort() only flips true once open() runs (SocketCanStream sets it as the
+    // first statement in open(), before attempting the actual socket/bind syscalls,
+    // so this holds regardless of whether open() itself succeeds in this sandbox).
+    stream->open("can0");
+    EXPECT_TRUE(stream->realPort());
+}
+
+TEST_F(CanStreamTest, OpenRejectsWriteOnNonWritableFormat) {
+    AscStream stream; // AscStream never sets writable_
+    std::string path = writeTemp("");
+    EXPECT_FALSE(stream.open(path, true));
+}
+
+TEST_F(CanStreamTest, OpenFailsForNonexistentFile) {
+    LogStream stream;
+    EXPECT_FALSE(stream.open("/nonexistent/path/does_not_exist.log"));
+}
+
+TEST_F(CanStreamTest, RewindReturnsToTheStartOfAFileBackedStream) {
+    std::string path = writeTemp(
+        "(1557265716.818982) can0 0CFF0686#F22700F2FFFFFF5F\n"
+        "(1557265716.869006) can0 0CFF0686#F22700F2FFFFFF5F\n");
+    LogStream stream;
+    ASSERT_TRUE(stream.open(path));
+    J1939_frame frame;
+    ASSERT_TRUE(stream.get(&frame));
+    ASSERT_TRUE(stream.get(&frame));
+    // A trailing newline on the last line means feof() isn't set by the read that
+    // returns it -- it takes one more (failing) read attempt to hit real EOF.
+    ASSERT_FALSE(stream.get(&frame));
+    ASSERT_FALSE(stream.dataAvailable());
+    stream.rewind();
+    EXPECT_TRUE(stream.get(&frame));
+}
+
+TEST_F(CanStreamTest, DataAvailableIsFalseAfterClose) {
+    std::string path = writeTemp("(1557265716.818982) can0 0CFF0686#F22700F2FFFFFF5F\n");
+    LogStream stream;
+    ASSERT_TRUE(stream.open(path));
+    EXPECT_TRUE(stream.ready());
+    stream.close();
+    EXPECT_FALSE(stream.dataAvailable());
+}
+
+TEST_F(CanStreamTest, ReadOnlyFormatsRejectPut) {
+    J1939_frame frame;
+    frame.reset();
+    EXPECT_FALSE(AscStream().put(frame));
+    EXPECT_FALSE(OutStream().put(frame));
+    EXPECT_FALSE(TrcStream().put(frame));
+}
+
+// Exercises MockCanStream's own utility behaviors that no other test happens to hit.
+TEST(MockCanStreamTest, SupportsFailureInjectionAndLifecycleMethods) {
+    MockCanStream stream;
+
+    stream.failNextOpen();
+    EXPECT_FALSE(stream.open("whatever"));
+    // The failure is one-shot: the next open() succeeds normally.
+    EXPECT_TRUE(stream.open("whatever"));
+
+    J1939_frame frame;
+    frame.reset();
+    EXPECT_FALSE(stream.get(&frame)); // empty queue
+
+    stream.failPut(true);
+    EXPECT_FALSE(stream.put(frame));
+    stream.failPut(false);
+    EXPECT_TRUE(stream.put(frame));
+    ASSERT_EQ(stream.written().size(), 1u);
+
+    EXPECT_EQ(stream.rewindCount(), 0u);
+    stream.rewind();
+    EXPECT_EQ(stream.rewindCount(), 1u);
+
+    stream.close();
+    EXPECT_FALSE(stream.dataAvailable());
 }

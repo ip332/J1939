@@ -67,4 +67,13 @@ TEST_F(UnionTest, MissedFieldsMessageUnionTest) {
     EXPECT_EQ(msg.toUnion(), led_msg_union);
 }
 
+// Exercises toUnion()'s big-endian (Motorola, "@0") branch -- every other toUnion()
+// test in this file uses little-endian ("@1") signals only.
+TEST_F(UnionTest, BigEndianMessageUnionTest) {
+    Message msg("BO_ 2365568042 BIG_ENDIAN_MSG: 1 Vector__XXX\n");
+    msg.addSignal(" SG_ Value : 0|8@0+ (1,0) [0|255] \"\" Vector__XXX\n");
+    std::string result = msg.toUnion();
+    EXPECT_NE(result.find("uint64_t value : 8;"), std::string::npos);
+}
+
 

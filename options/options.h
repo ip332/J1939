@@ -1,11 +1,9 @@
 #pragma once
 
-#include <functional>
 #include <string>
 #include <map>
 #include <memory>
 #include <iostream>
-#include <sstream>
 #include <vector>
 #include <unordered_map>
 
@@ -127,50 +125,5 @@ public:
             it->second->parseArgument(argv[i]);
         }
         return result;
-    }
-};
-
-// Helper class to pack several string options into a string
-class PackedOptions {
-    std::stringstream ss_;
-    bool empty_ = true;
-public:
-    bool pack(const std::string & key, const std::string & value) {
-        if (value.empty()) {
-            return false;
-        }
-        if (!empty_) {
-            ss_ << ',';
-        }
-        ss_ << key << ':' << value;
-        empty_ = false;
-        return true;
-    }
-    std::string str() const { return ss_.str(); }
-    // On the receiver side, scan the packed options and run a callback for each of them
-    static bool parse(const std::string &parameters, std::function<bool(const std::string & key, const std::string & value)> cb) {
-        size_t start = 0;
-        while(start < parameters.length()) {
-            auto end = parameters.find(",", start);
-            std::string parameter;
-            if (end == std::string::npos) {
-                parameter = parameters.substr(start);
-                start = parameters.length();
-            } else {
-                parameter = parameters.substr(start, end - start);
-                start = end + 1;
-            }
-            auto pos = parameter.find(":");
-            if (pos == std::string::npos) {
-                std::cout <<  "Invalid parameter: " << parameter;
-                return false;
-            }
-            auto option = parameter.substr(0, pos);
-            auto value = parameter.substr(pos + 1);
-            if (!cb(option, value)) {
-                return false;
-            }
-        }
-        return true;
     }
 };

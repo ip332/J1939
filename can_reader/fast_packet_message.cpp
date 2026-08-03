@@ -55,6 +55,13 @@ std::unique_ptr<J1939_frame> FastPacketMessage::handleDataFrame(
     // First 5 bits of the first data byte can be used to detect the first frame.
     if ((frame.buffer_[0] & 0x1F) == 0) {
         reset(frame);
+        // A message whose entire payload fits in the first frame (total size <= 6,
+        // common for many fast-packet PGNs) is already complete -- delivered here
+        // rather than never, since there's no continuation frame to complete it.
+        if (message_.dlc_ == expected_size_) {
+            result.reset(new J1939_frame());
+            *result = message_;
+        }
         return result;
     }
 

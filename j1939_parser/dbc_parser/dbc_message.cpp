@@ -194,7 +194,7 @@ PGN Message::toPgn() const {
 
 std::string Message::toString() const {
     std::stringstream output;
-    output << "From: " << dbc_name_ << ", ID: 0x" << std::uppercase << std::hex << can_id_;
+    output << "From: " << dbc_name_ << ", Name: " << name_ << ", ID: 0x" << std::uppercase << std::hex << can_id_;
     output << ", (" << std::dec << can_id_ << "), ";
     output << "PGN: 0x" << std::dec << pgn_ << " (" << std::hex << pgn_ << "), ";
     output << "DLC: " << std::dec << dlc_ << std::endl;

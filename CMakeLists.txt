@@ -18,6 +18,10 @@ macro(define_lib LIB_NAME)
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -Werror -Wall -Wextra -Wno-unused-parameter")
     set (CMAKE_INCLUDE_CURRENT_DIR ON)
     file(GLOB SRCS "*.cpp")
+    # Test files are colocated with the code they test (see tests/*_test(s).cpp moved
+    # into each module's own directory) but must never end up compiled into the
+    # production library itself.
+    list(FILTER SRCS EXCLUDE REGEX ".*_tests?\\.cpp$")
     file(GLOB HDRS "*.h")
     list(APPEND PUBLIC_HEADERS ${HDRS})
     set (PUBLIC_HEADERS  ${PUBLIC_HEADERS} PARENT_SCOPE)
@@ -57,11 +61,25 @@ find_package(GTest)
 
 add_definitions(-DDBC_FOLDER="${CMAKE_CURRENT_SOURCE_DIR}/tests/dbc/")
 
-# Build test app
-file(GLOB ALL_TESTS "tests/*cpp")
+# Build test app. Test files are colocated with the code they test rather than all
+# living in tests/, so collect them from each module's own directory.
+set(TEST_SOURCE_DIRS
+    tests
+    can_stream
+    can_reader
+    can_sandbox_lib
+    j1939_parser
+    j1939_parser/dbc_parser
+    options)
+set(ALL_TESTS)
+foreach(dir ${TEST_SOURCE_DIRS})
+    file(GLOB DIR_TESTS "${CMAKE_CURRENT_SOURCE_DIR}/${dir}/*_test.cpp"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/${dir}/*_tests.cpp")
+    list(APPEND ALL_TESTS ${DIR_TESTS})
+endforeach()
 # socket_can_stream_tests.cpp needs a real vcan0 interface + CAP_NET_ADMIN, so it's
 # built as its own binary (see socket_can_tests below) and kept out of all_tests.
-list(REMOVE_ITEM ALL_TESTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/socket_can_stream_tests.cpp")
+list(REMOVE_ITEM ALL_TESTS "${CMAKE_CURRENT_SOURCE_DIR}/can_stream/socket_can_stream_tests.cpp")
 add_executable(all_tests ${ALL_TESTS})
 add_test(all_tests ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/all_tests)
 
@@ -74,7 +92,7 @@ gtest_discover_tests(all_tests)
 # CAP_NET_ADMIN and a "vcan0" interface, neither available in a plain build sandbox,
 # so this is a separate binary that's built here but deliberately not registered via
 # add_test/gtest_discover_tests -- see README.md for how to run it.
-add_executable(socket_can_tests tests/socket_can_stream_tests.cpp)
+add_executable(socket_can_tests can_stream/socket_can_stream_tests.cpp)
 target_link_libraries(socket_can_tests GTest::GTest GTest::Main can_streams)
 
 # Sets up (best-effort) and runs the vcan0-based integration tests above. The caller
@@ -94,7 +112,8 @@ if(ENABLE_COVERAGE)
         add_custom_target(coverage
             COMMAND $<TARGET_FILE:all_tests>
             COMMAND ${GCOVR_EXECUTABLE} --root ${CMAKE_SOURCE_DIR}
-                    --exclude '.*/tests/.*' --exclude '.*/build/.*'
+                    --exclude '.*_tests?\.cpp$$' --exclude '.*/build/.*'
+                    --exclude-throw-branches
                     --print-summary
                     --html-details ${CMAKE_BINARY_DIR}/coverage.html
                     --txt ${CMAKE_BINARY_DIR}/coverage.txt

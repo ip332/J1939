@@ -156,6 +156,76 @@ TEST_F(J1939CodecTest, Set10BitsTest) {
     }
 }
 
+// --- SPN::toString / toInteger / toDouble ---
+// Field order: name_, start_bit_, length_, signedness_, little_endian_, scalar_,
+// offset_, min_, max_, enum_names_.
+
+TEST(SpnTest, ToStringShowsPlaceholderForUnknownEnumValue) {
+    SPN spn{"Mode", 0, 2, false, true, 1, 0, 0, 3, {{1, "On"}, {2, "Off"}}};
+    EXPECT_EQ(spn.toString(5), " Mode: \"??\"");
+}
+
+TEST(SpnTest, ToStringShowsNameForKnownEnumValue) {
+    SPN spn{"Mode", 0, 2, false, true, 1, 0, 0, 3, {{1, "On"}, {2, "Off"}}};
+    EXPECT_EQ(spn.toString(1), " Mode: On");
+}
+
+TEST(SpnTest, ToStringSignedWithScaling) {
+    SPN spn{"Temp", 0, 8, true, true, 0.5, 10, 0, 0, {}};
+    // 0xFE (254) as an 8-bit two's complement value is -2; -2*0.5+10 = 9.
+    EXPECT_EQ(spn.toString(0xFE), " Temp: 9.000000");
+}
+
+TEST(SpnTest, ToStringUnsignedWithScaling) {
+    SPN spn{"Speed", 0, 8, false, true, 2, 1, 0, 0, {}};
+    // 10*2+1 = 21.
+    EXPECT_EQ(spn.toString(10), " Speed: 21");
+}
+
+TEST(SpnTest, ToIntegerSigned) {
+    SPN spn{"Temp", 0, 8, true, true, 1, 0, 0, 0, {}};
+    EXPECT_EQ(spn.toInteger(0xFE), -2);
+}
+
+TEST(SpnTest, ToIntegerUnsigned) {
+    SPN spn{"Speed", 0, 8, false, true, 1, 0, 0, 0, {}};
+    EXPECT_EQ(spn.toInteger(200), 200);
+}
+
+TEST(SpnTest, ToDoubleSignedWithoutScaling) {
+    SPN spn{"Temp", 0, 8, true, true, 1, 0, 0, 0, {}};
+    EXPECT_DOUBLE_EQ(spn.toDouble(0xFE), -2.0);
+}
+
+// --- PGN::signalByName ---
+
+TEST(PgnTest, SignalByNameReturnsNullptrWhenNotFound) {
+    PGN pgn{"Test", 8, {SPN{"Speed", 0, 8, false, true, 1, 0, 0, 0, {}}}};
+    EXPECT_EQ(pgn.signalByName("DoesNotExist"), nullptr);
+}
+
+TEST(PgnTest, SignalByNameFindsExistingSignal) {
+    PGN pgn{"Test", 8, {SPN{"Speed", 0, 8, false, true, 1, 0, 0, 0, {}}}};
+    const SPN *spn = pgn.signalByName("Speed");
+    ASSERT_NE(spn, nullptr);
+    EXPECT_EQ(spn->name_, "Speed");
+}
+
+// --- J1939_frame::setFrom ---
+
+TEST(J1939FrameSetFromTest, RejectsDlcExceedingMaxDlc) {
+    J1939_frame frame;
+    uint8_t data[1] = {0};
+    EXPECT_FALSE(frame.setFrom(0x18FEF100, data, J1939_frame::max_dlc_ + 1));
+}
+
+TEST(J1939FrameSetFromTest, RejectsExtendedDataPageBitSet) {
+    J1939_frame frame;
+    // Bit 0x02000000 is the Extended Data Page (EDP) bit; this project's PGN encoding
+    // doesn't support it and setFrom() must reject rather than silently misdecode.
+    EXPECT_FALSE(frame.setFrom(0x1A000000));
+}
+
 // Checks that an arbitrary value can be set/get if it spawns for three bytes.
 TEST_F(J1939CodecTest, Set20BitsTest) {
     for (bool endian : { true, false }) {
