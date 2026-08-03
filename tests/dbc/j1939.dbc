@@ -35,6 +35,8 @@ BS_:
 
 BU_:
 
+CM_ "(*  NOTICE: This is a sample DBC file for educational purposes only. It is not  intended for use in any production or commercial application. The content  of this file is based on the J1939 DBC format, which is a standard for  communication between electronic control units (ECUs) in heavy-duty  vehicles. The J1939 DBC format is a proprietary standard developed by the  Society of Automotive Engineers (SAE) and is subject to copyright and  licensing restrictions.";
+
 
 BO_ 2565935153 B2: 8 Vector__XXX
  SG_ B2_Brake_Switch_2 : 16|2@1+ (1,0) [0|3] "" Vector__XXX

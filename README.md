@@ -79,17 +79,18 @@ Usage: can_sandbox <options>
 ```
 ##### Decoding a CAN stream from a log file or a physical CAN port (SocketCAN interface)
 ```bash
-virtualBox:~/src/J1939$ bin/can_sandbox -in candump.out -dbc tests/dbc/truck_messages.dbc
-         0.000000 EEC1 PGN:F004(61444) SA:0(0) Prio:3 Data(8): FFFF0FFF0C0C1CFF { EngTorqueMode: 255 ActlEngPrcntTorqueHighResolution: 1 DriversDemandEngPercentTorque: 130 A
-ctualEngPercentTorque: 18446744073709551506 EngSpeed: 415 SrcAddrssOfCntrllngDvcForEngCtrl: 12 EngStarterMode: 28 EEC1_DNC_1: 1 EngDemandPercentTorque: 130 }
-         0.001000 UNDEF_2365548032 PGN:FF66(65382) SA:0(0) DA:FF(255) Prio:3 Data(8): 810303FF70000000 (....p...)
-         0.002000 DM01 PGN:FECA(65226) SA:0(0) Prio:6 Data(8): 73FF0F38F000FF01 { ProtectLampStatus: 115 AmberWarningLampStatus: 28 RedStopLampState: 7 MalfunctionIndicatorL
-ampStatus: 1 FlashProtectLamp: 255 FlashAmberWarningLamp: 63 FlashRedStopLamp: 15 FlashMalfuncIndicatorLamp: 3 DTC1: 15742991 DM01_DNC: 511 }
-         0.003000 UNDEF_2349465377 PGN:900(2304) SA:21(33) DA:FF(255) Prio:3 Data(8): 73FF0FFFFF0FFFFF (s.......)
+virtualBox:~/src/J1939$ bin/can_sandbox -in candump.out -dbc tests/dbc/j1939.dbc
+         0.000000 EEC1 CAN ID:CF00400(217056256) Data(8): FFFFFF0C1CFFF47D { EngSpeed: 897 EngStarterMode: 4 EngDemandPercentTorque: 0 }
+         0.001000 UNDEFINED CAN ID:CFF6600(218064384) Data(8): 8103FF70000000FF (...p....)
+         0.002000 DM01 CAN ID:18FECA00(419351040) Data(8): 73FF38F0FF01FFFF { AmberWarningLampStatus: 0 MalfunctionIndicatorLampStatus: 1 DTC1: 33550392 }
+         0.003000 UNDEFINED CAN ID:C09FF21(201981729) Data(8): 73FFFFFFFFFFFFFF (s.......)
         * * *
-        23.614000 EBC2 PGN:FEBF(65215) SA:B(11) Prio:6 Data(8): 000000FFFF0F7DFF { FrontAxleSpeed: 0 RelativeSpeedFrontAxleLeftWheel: 18446744073709551609 RelativeSpeedFrontAxleRightWheel: 8 RelativeSpeedRearAxle1LeftWheel: 8 RelativeSpeedRearAxle1RightWheel: 18446744073709551610 RelativeSpeedRearAxle2LeftWheel: 0 RelativeSpeedRearAxle2RightWheel: 8 }
-        23.615000 EBC1 PGN:F001(61441) SA:17(23) Prio:6 Data(8): FFFF0F3CFF0FFFFF { ASREngCtrlActive: 255 ASRBrakeCtrlActive: 63 AntiLockBrakingActive: 15 EBSBrakeSwitch: 3 BrakePedalPos: 102 ABSOffroadSwitch: 15 ASROffroadSwitch: 3 ASRHillHolderSwitch: 0 TractionCtrlOverrideSwitch: 0 AccelInterlockSwitch: 60 EngDerateSwitch: 15 EngAuxShutdownSwitch: 3 RemoteAccelEnableSwitch: 0 EngRetarderSelection: 102 ABSFullyOperational: 15 EBSRedWarningSignal: 3 ABS_EBSAmberWarningSignal: 0 ATC_ASRInformationSignal: 0 SrcAddrssOfCntrllngDvcFrBrkeCtrl: 255 EBC1_DNC_1: 255 HaltBrakeSwitch: 63 TrailerABSStatus: 15 TrctrMntdTrailerABSWarningSignal: 3 }
-        23.616000 EEC1 PGN:F004(61444) SA:0(0) Prio:3 Data(8): FFFF0FFF000000FF { EngTorqueMode: 255 ActlEngPrcntTorqueHighResolution: 1 DriversDemandEngPercentTorque: 130 ActualEngPercentTorque: 18446744073709551506 EngSpeed: 31 SrcAddrssOfCntrllngDvcForEngCtrl: 0 EngStarterMode: 0 EEC1_DNC_1: 0 EngDemandPercentTorque: 130 }
+        23.613000 EBC1 CAN ID:18F0010B(418382091) Data(8): CFFFFFFFFFCD0BFF { AntiLockBrakingActive: 0 ABSFullyOperational: 1 ABS_EBSAmberWarningSignal: 0 SrcAddrssOfCntrllngDvcFrBrkeCtrl: 11 }
+        23.614000 EBC2 CAN ID:18FEBF0B(419348235) Data(8): 0000FFFF7DFFFFFF { FrontAxleSpeed: 0 RelativeSpeedRearAxle1LeftWheel: 0 }
+        23.615000 EBC1 CAN ID:18F00117(418382103) Data(8): FFFF3CFFFFFFFFFF { ABSOffroadSwitch: 0 TractionCtrlOverrideSwitch: 0 }
+        23.616000 EEC1 CAN ID:CF00400(217056256) Data(8): FFFFFF0000FFF07D { EngSpeed: 0 EngStarterMode: 0 EngDemandPercentTorque: 0 }
+Average bus load: 8000.47 bytes/sec; duration: 23.615 sec.
+                  1000.08 msg/sec
 Average bus load: 8000.47 bytes/sec; duration: 23.615 sec.
                   1000.08 msg/sec
 ```
@@ -97,12 +98,12 @@ Average bus load: 8000.47 bytes/sec; duration: 23.615 sec.
 ##### PGN format
 The first format produces a single file where **all input DBC files** are compiled into one `std::map`:
 ```c++
-std::map<uint32_t, PGN> truck_messages_dbc = {
+std::map<uint32_t, PGN> j1939_dbc = {
         . . .
 };
 ```
 The `J1939` class uses this map to decode/encode arbitrary CAN frames (see `can_sandbox.cpp` for details).
-Note: by default, the name of the first input DBC file is used to build the map name (e.g., `truck_messages.dbc` → `truck_messages_dbc`). This can be overridden with the `-name` command-line option.
+Note: by default, the name of the first input DBC file is used to build the map name (e.g., `j1939.dbc` → `j1939_dbc`). This can be overridden with the `-name` command-line option.
 
 ##### Union format
 The second format packs a byte buffer and a bitfield struct into an unnamed union, which is saved to a header file.
