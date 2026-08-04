@@ -3,7 +3,7 @@
 [![Build](https://github.com/ip332/j1939/actions/workflows/build.yml/badge.svg)](https://github.com/ip332/j1939/actions/workflows/build.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-A C++17 library for encoding and decoding J1939/CAN frames, plus a DBC compiler that turns `.dbc` files into compact, statically-typed C/C++ code — no runtime parsing, no dynamic allocation, suitable for safety-critical ECU code.
+A C++14 library for encoding and decoding J1939/CAN frames, plus a DBC compiler that turns `.dbc` files into compact, statically-typed C/C++ code — no runtime parsing, no dynamic allocation, suitable for safety-critical ECU code.
 
 ## Summary
 
@@ -33,7 +33,7 @@ This project therefore provides a DBC compiler that generates output in two form
 ### Building and running
 
 Dependencies:
-* cmake, a C++17 compiler
+* cmake, a C++14 compiler
 * gtest — ```apt install libgtest-dev```
 
 The following commands build the code and place three executables (*all_tests*, *can_sandbox*, and *dbc_compiler*) into the **bin** folder. Building inside the `build` directory keeps the repository root free of CMake artifacts:
