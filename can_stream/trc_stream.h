@@ -12,7 +12,8 @@ class TrcStream : public CanStream {
     // TrcStream objects (or a rewound one) don't share state.
     double start_time_ = 0.;
 public:
-    bool put(const J1939_frame & /*frame*/) const override { return false; };
+    TrcStream() : CanStream() { writable_ = true; }
+    bool put(const J1939_frame & frame) const override;
     bool get(J1939_frame *frame) override;
 };
 

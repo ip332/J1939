@@ -6,6 +6,15 @@
 
 #include <cstdlib>
 
+bool OutStream::put(const J1939_frame &frame) const {
+    fprintf(file_, "<0x%.8X> [%d] ", frame.canID(), frame.dlc_);
+    for (int i = 0; i < frame.dlc_; i++) {
+        fprintf(file_, "%.2X ", frame.buffer_[i]);
+    }
+    fprintf(file_, "\n");
+    return true;
+}
+
 bool OutStream::get(J1939_frame *frame) {
     auto fields_cnt = get_fields();
     if (fields_cnt == 0) {

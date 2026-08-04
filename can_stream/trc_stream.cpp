@@ -6,6 +6,15 @@
 
 #include <cstdlib>
 
+bool TrcStream::put(const J1939_frame &frame) const {
+    fprintf(file_, "1)  %.1f  Rx  %.8X  %d  ", frame.time_ns_ / 1E6, frame.canID(), frame.dlc_);
+    for (int i = 0; i < frame.dlc_; i++) {
+        fprintf(file_, "%.2X ", frame.buffer_[i]);
+    }
+    fprintf(file_, "\n");
+    return true;
+}
+
 bool TrcStream::get(J1939_frame *frame) {
     auto fields_cnt = get_fields();
     if (fields_cnt == 0) {

@@ -345,6 +345,65 @@ TEST_F(CanStreamTest, TxtStreamPutWritesAndReadsBackAFrame) {
     EXPECT_EQ(received.buffer_[0], 1);
 }
 
+TEST_F(CanStreamTest, AscStreamPutWritesAndReadsBackAFrame) {
+    std::string path = writeTemp("");
+    AscStream out;
+    ASSERT_TRUE(out.open(path, true));
+    J1939_frame sent;
+    const uint8_t payload[8] = {1, 2, 3, 4, 5, 6, 7, 8};
+    ASSERT_TRUE(sent.setFrom(0x18FEF100, payload, 8));
+    sent.time_ns_ = 1234567890;
+    EXPECT_TRUE(out.put(sent));
+    out.close();
+
+    AscStream in;
+    ASSERT_TRUE(in.open(path));
+    J1939_frame received;
+    ASSERT_TRUE(in.get(&received));
+    EXPECT_EQ(received.dlc_, 8);
+    EXPECT_EQ(received.buffer_[0], 1);
+    EXPECT_EQ(received.buffer_[7], 8);
+}
+
+TEST_F(CanStreamTest, OutStreamPutWritesAndReadsBackAFrame) {
+    std::string path = writeTemp("");
+    OutStream out;
+    ASSERT_TRUE(out.open(path, true));
+    J1939_frame sent;
+    const uint8_t payload[8] = {1, 2, 3, 4, 5, 6, 7, 8};
+    ASSERT_TRUE(sent.setFrom(0x0CF00400, payload, 8));
+    EXPECT_TRUE(out.put(sent));
+    out.close();
+
+    OutStream in;
+    ASSERT_TRUE(in.open(path));
+    J1939_frame received;
+    ASSERT_TRUE(in.get(&received));
+    EXPECT_EQ(received.dlc_, 8);
+    EXPECT_EQ(received.buffer_[0], 1);
+    EXPECT_EQ(received.buffer_[7], 8);
+}
+
+TEST_F(CanStreamTest, TrcStreamPutWritesAndReadsBackAFrame) {
+    std::string path = writeTemp("");
+    TrcStream out;
+    ASSERT_TRUE(out.open(path, true));
+    J1939_frame sent;
+    const uint8_t payload[8] = {1, 2, 3, 4, 5, 6, 7, 8};
+    ASSERT_TRUE(sent.setFrom(0x1CFF6A27, payload, 8));
+    sent.time_ns_ = 3099800000; // 3099.8 ms
+    EXPECT_TRUE(out.put(sent));
+    out.close();
+
+    TrcStream in;
+    ASSERT_TRUE(in.open(path));
+    J1939_frame received;
+    ASSERT_TRUE(in.get(&received));
+    EXPECT_EQ(received.dlc_, 8);
+    EXPECT_EQ(received.buffer_[0], 1);
+    EXPECT_EQ(received.buffer_[7], 8);
+}
+
 TEST_F(CanStreamTest, TrcStreamRejectsDataLineWithTooFewFields) {
     J1939_frame frame;
     bool ok = decodeFirstDataLine<TrcStream>(
@@ -402,8 +461,19 @@ TEST_F(CanStreamTest, CanStreamForFallsBackToSocketCanForUnknownExtension) {
     EXPECT_TRUE(stream->realPort());
 }
 
+namespace {
+// Minimal CanStream subclass that leaves writable_ at its default (false), used to
+// exercise CanStream::open()'s write-gating in isolation now that every concrete
+// file format supports put().
+class NonWritableStream : public CanStream {
+public:
+    bool put(const J1939_frame & /*frame*/) const override { return false; }
+    bool get(J1939_frame * /*frame*/) override { return false; }
+};
+}  // namespace
+
 TEST_F(CanStreamTest, OpenRejectsWriteOnNonWritableFormat) {
-    AscStream stream; // AscStream never sets writable_
+    NonWritableStream stream;
     std::string path = writeTemp("");
     EXPECT_FALSE(stream.open(path, true));
 }
@@ -437,14 +507,6 @@ TEST_F(CanStreamTest, DataAvailableIsFalseAfterClose) {
     EXPECT_TRUE(stream.ready());
     stream.close();
     EXPECT_FALSE(stream.dataAvailable());
-}
-
-TEST_F(CanStreamTest, ReadOnlyFormatsRejectPut) {
-    J1939_frame frame;
-    frame.reset();
-    EXPECT_FALSE(AscStream().put(frame));
-    EXPECT_FALSE(OutStream().put(frame));
-    EXPECT_FALSE(TrcStream().put(frame));
 }
 
 // Exercises MockCanStream's own utility behaviors that no other test happens to hit.

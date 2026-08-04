@@ -20,6 +20,20 @@ uint8_t AscStream::month(const char *str) const {
     return 0;
 }
 
+bool AscStream::put(const J1939_frame &frame) const {
+    // Mirrors the real Vector ASC convention: the extended bit isn't folded into the
+    // numeric ID (unlike Log/Out/Trc), it's denoted by a trailing 'x' instead -- so the
+    // flag bit must be stripped from canID() before printing.
+    uint32_t can_id = frame.canID() & ~static_cast<uint32_t>(CAN_EFF_FLAG);
+    fprintf(file_, "%013.6f 1  %X%s  Rx  d %d  ", frame.time_ns_ / 1E9, can_id,
+            frame.extended_ ? "x" : "", frame.dlc_);
+    for (int i = 0; i < frame.dlc_; i++) {
+        fprintf(file_, "%.2X ", frame.buffer_[i]);
+    }
+    fprintf(file_, "\n");
+    return true;
+}
+
 bool AscStream::get(J1939_frame *msg) {
     auto fields_cnt = get_fields();
     if (fields_cnt == 0) {

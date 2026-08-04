@@ -12,7 +12,8 @@ class OutStream : public CanStream {
     // so multiple OutStream objects don't share fake clocks.
     double fake_time_ = 0.;
 public:
-    bool put(const J1939_frame & /*frame*/) const override { return false; };
+    OutStream() : CanStream() { writable_ = true; }
+    bool put(const J1939_frame & frame) const override;
     bool get(J1939_frame *frame) override;
 };
 
